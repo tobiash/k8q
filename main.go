@@ -316,6 +316,68 @@ func (cmd *RenameCmd) Run(g *Globals) error {
 	return runPipeline(g, f)
 }
 
+// CountCmd counts matching manifests.
+type CountCmd struct {
+	Resource    string `arg:"" optional:"" help:"Resource filter (kind, kind/name, or api-group)."`
+	Kind        string `help:"Filter by kind."`
+	Name        string `help:"Filter by name."`
+	Namespace   string `short:"n" help:"Filter by namespace."`
+	Group       string `short:"g" help:"Filter by API group."`
+	Selector    string `short:"l" help:"Label selector."`
+	GroupByKind bool   `name:"group-by-kind" help:"Group counts by resource kind."`
+}
+
+func (cmd *CountCmd) Run(g *Globals) error {
+	sel, err := engine.ParseSelectorFlag(cmd.Selector)
+	if err != nil {
+		return err
+	}
+
+	f := engine.CountFilter(engine.CountOptions{
+		GroupByKind: cmd.GroupByKind,
+		Match: engine.MatchOptions{
+			Resource:  cmd.Resource,
+			Kind:      cmd.Kind,
+			Name:      cmd.Name,
+			Namespace: cmd.Namespace,
+			Group:     cmd.Group,
+			Selector:  sel,
+			Mode:      engine.AndMode,
+		},
+	})
+	return runPipeline(g, f)
+}
+
+// SumCmd sums CPU and Memory requests for matching manifests.
+type SumCmd struct {
+	Resource  string `arg:"" optional:"" help:"Resource filter (kind, kind/name, or api-group)."`
+	Kind      string `help:"Filter by kind."`
+	Name      string `help:"Filter by name."`
+	Namespace string `short:"n" help:"Filter by namespace."`
+	Group     string `short:"g" help:"Filter by API group."`
+	Selector  string `short:"l" help:"Label selector."`
+}
+
+func (cmd *SumCmd) Run(g *Globals) error {
+	sel, err := engine.ParseSelectorFlag(cmd.Selector)
+	if err != nil {
+		return err
+	}
+
+	f := engine.SumFilter(engine.SumOptions{
+		Match: engine.MatchOptions{
+			Resource:  cmd.Resource,
+			Kind:      cmd.Kind,
+			Name:      cmd.Name,
+			Namespace: cmd.Namespace,
+			Group:     cmd.Group,
+			Selector:  sel,
+			Mode:      engine.AndMode,
+		},
+	})
+	return runPipeline(g, f)
+}
+
 // DropCmd removes manifests matching kind, name, namespace, api group and/or label selector.
 type DropCmd struct {
 	Resource  string `arg:"" optional:"" help:"Resource filter (kind, kind/name, or api-group)."`
@@ -392,6 +454,8 @@ type CLI struct {
 	Scale        ScaleCmd        `cmd:"" help:"Update spec.replicas for matching manifests."`
 	Rename       RenameCmd       `cmd:"" help:"Prefix or suffix metadata.name for matching manifests."`
 	SetNamespace SetNamespaceCmd `cmd:"" help:"Overwrite metadata.namespace for matching manifests."`
+	Count        CountCmd        `cmd:"" help:"Count matching manifests."`
+	Sum          SumCmd          `cmd:"" help:"Sum CPU and Memory requests for matching manifests."`
 }
 
 func main() {
