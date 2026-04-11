@@ -61,7 +61,7 @@ cat manifest.yaml | k8q subst --env-file .env
 helm template my-chart | k8q subst --env-file production.env
 ```
 
-### `label` — Inject labels into manifests
+### `label` — Inject labels
 
 Adds a label to `metadata.labels` on matching manifests. For workload kinds (Deployment, DaemonSet, StatefulSet, Job), the label is also injected into `spec.template.metadata.labels`.
 
@@ -71,29 +71,74 @@ helm template my-chart | k8q label app.kubernetes.io/managed-by=k8q
 
 # Label only Deployments
 helm template my-chart | k8q label app=web --kind Deployment
+```
 
-# Add a version label before applying
-kustomize build . | k8q label app.kubernetes.io/version=1.2.3 | kubectl apply -f -
+### `annotate` — Inject annotations
+
+Adds an annotation to `metadata.annotations` on matching manifests.
+
+```bash
+# Inject an annotation
+kustomize build . | k8q annotate reloader.stakater.com/auto=true --kind Deployment
+```
+
+### `set-image` — Update container images
+
+Updates container images in matching manifests (Pods, Deployments, StatefulSets, DaemonSets, Jobs, CronJobs).
+
+```bash
+# Update a specific container image
+helm template my-chart | k8q set-image my-app=my-registry.io/app:v2.0.0
 ```
 
 ### `set-namespace` — Overwrite namespace
 
-Sets `metadata.namespace` on matching manifests in the stream.
+Sets `metadata.namespace` on matching manifests.
 
 ```bash
-# Deploy everything to a specific namespace
-helm template my-chart | k8q set-namespace production
+# Move resources from 'default' to 'production'
+helm template my-chart | k8q set-namespace production --namespace default
+```
 
-# Only move resources from 'default' to 'production'
-helm template my-chart | k8q set-namespace production --old-namespace default
+### `patch` — Merge YAML snippets
 
-# Override namespace for a specific deployment
-kustomize build . | k8q set-namespace staging --kind Deployment --name my-app
+Deep-merges a YAML snippet into matching manifests.
+
+```bash
+# Add a nodeSelector to all StatefulSets
+k8q patch 'spec: { template: { spec: { nodeSelector: { disk: ssd } } } }' --kind StatefulSet
+```
+
+### `remove` — Delete fields
+
+Deletes a field from matching manifests using a dot-separated path.
+
+```bash
+# Remove clusterIP from Services
+k8q remove spec.clusterIP --kind Service
+```
+
+### `scale` — Update replicas
+
+Updates `spec.replicas` for matching manifests.
+
+```bash
+# Scale down everything in a namespace
+k8q scale 0 --namespace dev
+```
+
+### `rename` — Prefix/Suffix names
+
+Modifies `metadata.name` by adding a prefix or suffix.
+
+```bash
+# Add a suffix to all resources
+k8q rename --suffix "-v2"
 ```
 
 ## Match Criteria
 
-Both filtering (`get`, `drop`) and mutation (`label`, `set-namespace`) commands support the same matching filters:
+Both filtering (`get`, `drop`) and mutation commands support the same matching filters:
 
 | Flag | Shorthand | Description |
 |---|---|---|
@@ -104,7 +149,7 @@ Both filtering (`get`, `drop`) and mutation (`label`, `set-namespace`) commands 
 | `--selector` | `-l` | Kubernetes label selector |
 | (positional) | | kind, kind/name, or api-group |
 
-For `get`, `label`, and `set-namespace`, multiple criteria are combined with **AND**.
+For `get`, `label`, `annotate`, etc., multiple criteria are combined with **AND**.
 For `drop`, multiple criteria are combined with **OR**.
 
 Matching is optional for mutators (they match everything by default) but required for filters.

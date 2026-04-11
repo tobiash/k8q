@@ -113,6 +113,209 @@ func (cmd *LabelCmd) Run(g *Globals) error {
 	return runPipeline(g, f)
 }
 
+// AnnotateCmd injects an annotation into matching manifests.
+type AnnotateCmd struct {
+	Annotation string `arg:"" help:"Annotation to inject (key=value)."`
+	Resource   string `arg:"" optional:"" help:"Resource filter (kind, kind/name, or api-group)."`
+	Kind       string `help:"Filter by kind."`
+	Name       string `help:"Filter by name."`
+	Namespace  string `short:"n" help:"Filter by namespace."`
+	Group      string `short:"g" help:"Filter by API group."`
+	Selector   string `short:"l" help:"Label selector."`
+}
+
+func (cmd *AnnotateCmd) Run(g *Globals) error {
+	sel, err := engine.ParseSelectorFlag(cmd.Selector)
+	if err != nil {
+		return err
+	}
+
+	f, err := engine.AnnotateFilter(engine.AnnotateOptions{
+		Annotation: cmd.Annotation,
+		Match: engine.MatchOptions{
+			Resource:  cmd.Resource,
+			Kind:      cmd.Kind,
+			Name:      cmd.Name,
+			Namespace: cmd.Namespace,
+			Group:     cmd.Group,
+			Selector:  sel,
+			Mode:      engine.AndMode,
+		},
+	})
+	if err != nil {
+		return err
+	}
+	return runPipeline(g, f)
+}
+
+// SetImageCmd updates container images in matching manifests.
+type SetImageCmd struct {
+	Image     string `arg:"" help:"Image to set (container=image:tag)."`
+	Resource  string `arg:"" optional:"" help:"Resource filter (kind, kind/name, or api-group)."`
+	Kind      string `help:"Filter by kind."`
+	Name      string `help:"Filter by name."`
+	Namespace string `short:"n" help:"Filter by namespace."`
+	Group     string `short:"g" help:"Filter by API group."`
+	Selector  string `short:"l" help:"Label selector."`
+}
+
+func (cmd *SetImageCmd) Run(g *Globals) error {
+	sel, err := engine.ParseSelectorFlag(cmd.Selector)
+	if err != nil {
+		return err
+	}
+
+	f, err := engine.SetImageFilter(engine.SetImageOptions{
+		Image: cmd.Image,
+		Match: engine.MatchOptions{
+			Resource:  cmd.Resource,
+			Kind:      cmd.Kind,
+			Name:      cmd.Name,
+			Namespace: cmd.Namespace,
+			Group:     cmd.Group,
+			Selector:  sel,
+			Mode:      engine.AndMode,
+		},
+	})
+	if err != nil {
+		return err
+	}
+	return runPipeline(g, f)
+}
+
+// PatchCmd merges a YAML patch into matching manifests.
+type PatchCmd struct {
+	Patch     string `arg:"" help:"YAML patch snippet to merge."`
+	Resource  string `arg:"" optional:"" help:"Resource filter (kind, kind/name, or api-group)."`
+	Kind      string `help:"Filter by kind."`
+	Name      string `help:"Filter by name."`
+	Namespace string `short:"n" help:"Filter by namespace."`
+	Group     string `short:"g" help:"Filter by API group."`
+	Selector  string `short:"l" help:"Label selector."`
+}
+
+func (cmd *PatchCmd) Run(g *Globals) error {
+	sel, err := engine.ParseSelectorFlag(cmd.Selector)
+	if err != nil {
+		return err
+	}
+
+	f, err := engine.PatchFilter(engine.PatchOptions{
+		Patch: cmd.Patch,
+		Match: engine.MatchOptions{
+			Resource:  cmd.Resource,
+			Kind:      cmd.Kind,
+			Name:      cmd.Name,
+			Namespace: cmd.Namespace,
+			Group:     cmd.Group,
+			Selector:  sel,
+			Mode:      engine.AndMode,
+		},
+	})
+	if err != nil {
+		return err
+	}
+	return runPipeline(g, f)
+}
+
+// RemoveCmd deletes a field from matching manifests.
+type RemoveCmd struct {
+	Field     string `arg:"" help:"Field path to remove (e.g. spec.clusterIP)."`
+	Resource  string `arg:"" optional:"" help:"Resource filter (kind, kind/name, or api-group)."`
+	Kind      string `help:"Filter by kind."`
+	Name      string `help:"Filter by name."`
+	Namespace string `short:"n" help:"Filter by namespace."`
+	Group     string `short:"g" help:"Filter by API group."`
+	Selector  string `short:"l" help:"Label selector."`
+}
+
+func (cmd *RemoveCmd) Run(g *Globals) error {
+	sel, err := engine.ParseSelectorFlag(cmd.Selector)
+	if err != nil {
+		return err
+	}
+
+	f := engine.RemoveFilter(engine.RemoveOptions{
+		Field: cmd.Field,
+		Match: engine.MatchOptions{
+			Resource:  cmd.Resource,
+			Kind:      cmd.Kind,
+			Name:      cmd.Name,
+			Namespace: cmd.Namespace,
+			Group:     cmd.Group,
+			Selector:  sel,
+			Mode:      engine.AndMode,
+		},
+	})
+	return runPipeline(g, f)
+}
+
+// ScaleCmd updates spec.replicas for matching manifests.
+type ScaleCmd struct {
+	Replicas  string `arg:"" help:"Number of replicas."`
+	Resource  string `arg:"" optional:"" help:"Resource filter (kind, kind/name, or api-group)."`
+	Kind      string `help:"Filter by kind."`
+	Name      string `help:"Filter by name."`
+	Namespace string `short:"n" help:"Filter by namespace."`
+	Group     string `short:"g" help:"Filter by API group."`
+	Selector  string `short:"l" help:"Label selector."`
+}
+
+func (cmd *ScaleCmd) Run(g *Globals) error {
+	sel, err := engine.ParseSelectorFlag(cmd.Selector)
+	if err != nil {
+		return err
+	}
+
+	f := engine.ScaleFilter(engine.ScaleOptions{
+		Replicas: cmd.Replicas,
+		Match: engine.MatchOptions{
+			Resource:  cmd.Resource,
+			Kind:      cmd.Kind,
+			Name:      cmd.Name,
+			Namespace: cmd.Namespace,
+			Group:     cmd.Group,
+			Selector:  sel,
+			Mode:      engine.AndMode,
+		},
+	})
+	return runPipeline(g, f)
+}
+
+// RenameCmd prefixes or suffixes metadata.name.
+type RenameCmd struct {
+	Resource  string `arg:"" optional:"" help:"Resource filter (kind, kind/name, or api-group)."`
+	Prefix    string `help:"Prefix to add to name."`
+	Suffix    string `help:"Suffix to add to name."`
+	Kind      string `help:"Filter by kind."`
+	Name      string `help:"Filter by name."`
+	Namespace string `short:"n" help:"Filter by namespace."`
+	Group     string `short:"g" help:"Filter by API group."`
+	Selector  string `short:"l" help:"Label selector."`
+}
+
+func (cmd *RenameCmd) Run(g *Globals) error {
+	sel, err := engine.ParseSelectorFlag(cmd.Selector)
+	if err != nil {
+		return err
+	}
+
+	f := engine.RenameFilter(engine.RenameOptions{
+		Prefix: cmd.Prefix,
+		Suffix: cmd.Suffix,
+		Match: engine.MatchOptions{
+			Resource:  cmd.Resource,
+			Kind:      cmd.Kind,
+			Name:      cmd.Name,
+			Namespace: cmd.Namespace,
+			Group:     cmd.Group,
+			Selector:  sel,
+			Mode:      engine.AndMode,
+		},
+	})
+	return runPipeline(g, f)
+}
+
 // DropCmd removes manifests matching kind, name, namespace, api group and/or label selector.
 type DropCmd struct {
 	Resource  string `arg:"" optional:"" help:"Resource filter (kind, kind/name, or api-group)."`
@@ -182,6 +385,12 @@ type CLI struct {
 	Drop         DropCmd         `cmd:"" help:"Filter the stream to remove matching manifests."`
 	Subst        SubstCmd        `cmd:"" help:"Substitute environment variables from an .env file."`
 	Label        LabelCmd        `cmd:"" help:"Inject a label into matching manifests."`
+	Annotate     AnnotateCmd     `cmd:"" help:"Inject an annotation into matching manifests."`
+	SetImage     SetImageCmd     `cmd:"" help:"Update container images in matching manifests."`
+	Patch        PatchCmd        `cmd:"" help:"Merge a YAML patch into matching manifests."`
+	Remove       RemoveCmd       `cmd:"" help:"Delete a field from matching manifests."`
+	Scale        ScaleCmd        `cmd:"" help:"Update spec.replicas for matching manifests."`
+	Rename       RenameCmd       `cmd:"" help:"Prefix or suffix metadata.name for matching manifests."`
 	SetNamespace SetNamespaceCmd `cmd:"" help:"Overwrite metadata.namespace for matching manifests."`
 }
 
