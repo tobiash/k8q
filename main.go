@@ -471,14 +471,25 @@ type CLI struct {
 }
 
 func main() {
-	ctx := kong.Parse(&CLI{},
+	parser := kong.Must(&CLI{},
 		kong.Name("k8q"),
 		kong.Description("A Unix-style pipe for filtering, mutating, and exploring Kubernetes YAML manifests."),
+		kong.UsageOnError(),
+		kong.ConfigureHelp(kong.HelpOptions{
+			Compact: true,
+			Summary: true,
+		}),
 		kong.Bind(&Globals{
 			In:  os.Stdin,
 			Out: os.Stdout,
 		}),
 	)
 
-	ctx.FatalIfErrorf(ctx.Run())
+	ctx, err := parser.Parse(os.Args[1:])
+	if err != nil {
+		parser.FatalIfErrorf(err)
+	}
+
+	err = ctx.Run()
+	ctx.FatalIfErrorf(err)
 }
