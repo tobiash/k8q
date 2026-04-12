@@ -1,0 +1,25 @@
+# Binaries
+k8q
+*.exe
+*.exe~
+*.dll
+*.so
+*.dylib
+
+# Build output
+dist/
+
+# Test
+*.test
+*.out
+
+# IDE
+.idea/
+.vscode/
+*.swp
+*.swo
+*~
+
+# OS
+.DS_Store
+Thumbs.db

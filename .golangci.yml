@@ -1,0 +1,28 @@
+run:
+  timeout: 5m
+
+linters:
+  enable:
+    - errcheck
+    - goimports
+    - revive
+    - govet
+    - staticcheck
+    - gosec
+    - ineffassign
+    - misspell
+    - gocyclo
+
+linters-settings:
+  goimports:
+    local-prefixes: github.com/tobiash/k8q
+  revive:
+    rules:
+      - name: exported
+  gocyclo:
+    min-complexity: 15
+
+issues:
+  exclude-use-default: false
+  max-issues-per-linter: 0
+  max-same-issues: 0
