@@ -350,12 +350,14 @@ func (cmd *CountCmd) Run(g *Globals) error {
 
 // SumCmd sums CPU and Memory requests for matching manifests.
 type SumCmd struct {
-	Resource  string `arg:"" optional:"" help:"Resource filter (kind, kind/name, or api-group)."`
-	Kind      string `help:"Filter by kind."`
-	Name      string `help:"Filter by name."`
-	Namespace string `short:"n" help:"Filter by namespace."`
-	Group     string `short:"g" help:"Filter by API group."`
-	Selector  string `short:"l" help:"Label selector."`
+	Resource        string `arg:"" optional:"" help:"Resource filter (kind, kind/name, or api-group)."`
+	Kind            string `help:"Filter by kind."`
+	Name            string `help:"Filter by name."`
+	Namespace       string `short:"n" help:"Filter by namespace."`
+	Group           string `short:"g" help:"Filter by API group."`
+	Selector        string `short:"l" help:"Label selector."`
+	RequireRequests bool   `name:"require-requests" help:"Error if any matching container is missing resource requests."`
+	RequireLimits   bool   `name:"require-limits" help:"Error if any matching container is missing resource limits."`
 }
 
 func (cmd *SumCmd) Run(g *Globals) error {
@@ -365,6 +367,8 @@ func (cmd *SumCmd) Run(g *Globals) error {
 	}
 
 	f := engine.SumFilter(engine.SumOptions{
+		RequireRequests: cmd.RequireRequests,
+		RequireLimits:   cmd.RequireLimits,
 		Match: engine.MatchOptions{
 			Resource:  cmd.Resource,
 			Kind:      cmd.Kind,
