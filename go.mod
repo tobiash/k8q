@@ -6,6 +6,8 @@ require (
 	github.com/alecthomas/kong v1.15.0
 	github.com/drone/envsubst/v2 v2.0.0-20210730161058-179042472c46
 	github.com/google/go-cmp v0.7.0
+	github.com/jotaen/kong-completion v0.0.13
+	github.com/posener/complete v1.2.3
 	k8s.io/apimachinery v0.35.3
 )
 
@@ -14,9 +16,7 @@ require (
 	github.com/go-logr/logr v1.4.3 // indirect
 	github.com/hashicorp/errwrap v1.1.0 // indirect
 	github.com/hashicorp/go-multierror v1.1.1 // indirect
-	github.com/jotaen/kong-completion v0.0.13 // indirect
 	github.com/monochromegane/go-gitignore v0.0.0-20200626010858-205db1a8cc00 // indirect
-	github.com/posener/complete v1.2.3 // indirect
 	github.com/riywo/loginshell v0.0.0-20200815045211-7d26008be1ab // indirect
 	github.com/x448/float16 v0.8.4 // indirect
 	github.com/xlab/treeprint v1.2.0 // indirect

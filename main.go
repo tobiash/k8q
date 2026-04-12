@@ -7,7 +7,8 @@ import (
 
 	"github.com/alecthomas/kong"
 	"github.com/drone/envsubst/v2"
-	"github.com/jotaen/kong-completion"
+	kongcompletion "github.com/jotaen/kong-completion"
+	"github.com/posener/complete"
 	"github.com/tobiash/k8q/internal/engine"
 )
 
@@ -20,8 +21,8 @@ type Globals struct {
 
 // GetCmd filters manifests by kind, name, namespace, api group and/or label selector.
 type GetCmd struct {
-	Resource  string `arg:"" optional:"" help:"Resource filter (kind, kind/name, or api-group)."`
-	Kind      string `help:"Filter by kind."`
+	Resource  string `arg:"" optional:"" help:"Resource filter (kind, kind/name, or api-group)." predictor:"kind"`
+	Kind      string `help:"Filter by kind." predictor:"kind"`
 	Name      string `help:"Filter by name."`
 	Namespace string `short:"n" help:"Filter by namespace."`
 	Group     string `short:"g" help:"Filter by API group."`
@@ -82,8 +83,8 @@ func (cmd *SubstCmd) Run(g *Globals) error {
 // LabelCmd injects a label into manifests matching certain criteria.
 type LabelCmd struct {
 	Label     string `arg:"" help:"Label to inject (key=value)."`
-	Resource  string `arg:"" optional:"" help:"Resource filter (kind, kind/name, or api-group)."`
-	Kind      string `help:"Filter by kind."`
+	Resource  string `arg:"" optional:"" help:"Resource filter (kind, kind/name, or api-group)." predictor:"kind"`
+	Kind      string `help:"Filter by kind." predictor:"kind"`
 	Name      string `help:"Filter by name."`
 	Namespace string `short:"n" help:"Filter by namespace."`
 	Group     string `short:"g" help:"Filter by API group."`
@@ -117,8 +118,8 @@ func (cmd *LabelCmd) Run(g *Globals) error {
 // AnnotateCmd injects an annotation into matching manifests.
 type AnnotateCmd struct {
 	Annotation string `arg:"" help:"Annotation to inject (key=value)."`
-	Resource   string `arg:"" optional:"" help:"Resource filter (kind, kind/name, or api-group)."`
-	Kind       string `help:"Filter by kind."`
+	Resource   string `arg:"" optional:"" help:"Resource filter (kind, kind/name, or api-group)." predictor:"kind"`
+	Kind       string `help:"Filter by kind." predictor:"kind"`
 	Name       string `help:"Filter by name."`
 	Namespace  string `short:"n" help:"Filter by namespace."`
 	Group      string `short:"g" help:"Filter by API group."`
@@ -152,8 +153,8 @@ func (cmd *AnnotateCmd) Run(g *Globals) error {
 // SetImageCmd updates container images in matching manifests.
 type SetImageCmd struct {
 	Image     string `arg:"" help:"Image to set (container=image:tag)."`
-	Resource  string `arg:"" optional:"" help:"Resource filter (kind, kind/name, or api-group)."`
-	Kind      string `help:"Filter by kind."`
+	Resource  string `arg:"" optional:"" help:"Resource filter (kind, kind/name, or api-group)." predictor:"kind"`
+	Kind      string `help:"Filter by kind." predictor:"kind"`
 	Name      string `help:"Filter by name."`
 	Namespace string `short:"n" help:"Filter by namespace."`
 	Group     string `short:"g" help:"Filter by API group."`
@@ -187,8 +188,8 @@ func (cmd *SetImageCmd) Run(g *Globals) error {
 // PatchCmd merges a YAML patch into matching manifests.
 type PatchCmd struct {
 	Patch     string `arg:"" help:"YAML patch snippet to merge."`
-	Resource  string `arg:"" optional:"" help:"Resource filter (kind, kind/name, or api-group)."`
-	Kind      string `help:"Filter by kind."`
+	Resource  string `arg:"" optional:"" help:"Resource filter (kind, kind/name, or api-group)." predictor:"kind"`
+	Kind      string `help:"Filter by kind." predictor:"kind"`
 	Name      string `help:"Filter by name."`
 	Namespace string `short:"n" help:"Filter by namespace."`
 	Group     string `short:"g" help:"Filter by API group."`
@@ -222,8 +223,8 @@ func (cmd *PatchCmd) Run(g *Globals) error {
 // RemoveCmd deletes a field from matching manifests.
 type RemoveCmd struct {
 	Field     string `arg:"" help:"Field path to remove (e.g. spec.clusterIP)."`
-	Resource  string `arg:"" optional:"" help:"Resource filter (kind, kind/name, or api-group)."`
-	Kind      string `help:"Filter by kind."`
+	Resource  string `arg:"" optional:"" help:"Resource filter (kind, kind/name, or api-group)." predictor:"kind"`
+	Kind      string `help:"Filter by kind." predictor:"kind"`
 	Name      string `help:"Filter by name."`
 	Namespace string `short:"n" help:"Filter by namespace."`
 	Group     string `short:"g" help:"Filter by API group."`
@@ -254,8 +255,8 @@ func (cmd *RemoveCmd) Run(g *Globals) error {
 // ScaleCmd updates spec.replicas for matching manifests.
 type ScaleCmd struct {
 	Replicas  string `arg:"" help:"Number of replicas."`
-	Resource  string `arg:"" optional:"" help:"Resource filter (kind, kind/name, or api-group)."`
-	Kind      string `help:"Filter by kind."`
+	Resource  string `arg:"" optional:"" help:"Resource filter (kind, kind/name, or api-group)." predictor:"kind"`
+	Kind      string `help:"Filter by kind." predictor:"kind"`
 	Name      string `help:"Filter by name."`
 	Namespace string `short:"n" help:"Filter by namespace."`
 	Group     string `short:"g" help:"Filter by API group."`
@@ -285,10 +286,10 @@ func (cmd *ScaleCmd) Run(g *Globals) error {
 
 // RenameCmd prefixes or suffixes metadata.name.
 type RenameCmd struct {
-	Resource  string `arg:"" optional:"" help:"Resource filter (kind, kind/name, or api-group)."`
+	Resource  string `arg:"" optional:"" help:"Resource filter (kind, kind/name, or api-group)." predictor:"kind"`
 	Prefix    string `help:"Prefix to add to name."`
 	Suffix    string `help:"Suffix to add to name."`
-	Kind      string `help:"Filter by kind."`
+	Kind      string `help:"Filter by kind." predictor:"kind"`
 	Name      string `help:"Filter by name."`
 	Namespace string `short:"n" help:"Filter by namespace."`
 	Group     string `short:"g" help:"Filter by API group."`
@@ -319,8 +320,8 @@ func (cmd *RenameCmd) Run(g *Globals) error {
 
 // CountCmd counts matching manifests.
 type CountCmd struct {
-	Resource    string `arg:"" optional:"" help:"Resource filter (kind, kind/name, or api-group)."`
-	Kind        string `help:"Filter by kind."`
+	Resource    string `arg:"" optional:"" help:"Resource filter (kind, kind/name, or api-group)." predictor:"kind"`
+	Kind        string `help:"Filter by kind." predictor:"kind"`
 	Name        string `help:"Filter by name."`
 	Namespace   string `short:"n" help:"Filter by namespace."`
 	Group       string `short:"g" help:"Filter by API group."`
@@ -351,8 +352,8 @@ func (cmd *CountCmd) Run(g *Globals) error {
 
 // SumCmd sums CPU and Memory requests for matching manifests.
 type SumCmd struct {
-	Resource        string `arg:"" optional:"" help:"Resource filter (kind, kind/name, or api-group)."`
-	Kind            string `help:"Filter by kind."`
+	Resource        string `arg:"" optional:"" help:"Resource filter (kind, kind/name, or api-group)." predictor:"kind"`
+	Kind            string `help:"Filter by kind." predictor:"kind"`
 	Name            string `help:"Filter by name."`
 	Namespace       string `short:"n" help:"Filter by namespace."`
 	Group           string `short:"g" help:"Filter by API group."`
@@ -393,8 +394,8 @@ func (cmd *SumCmd) Run(g *Globals) error {
 
 // DropCmd removes manifests matching kind, name, namespace, api group and/or label selector.
 type DropCmd struct {
-	Resource  string `arg:"" optional:"" help:"Resource filter (kind, kind/name, or api-group)."`
-	Kind      string `help:"Filter by kind."`
+	Resource  string `arg:"" optional:"" help:"Resource filter (kind, kind/name, or api-group)." predictor:"kind"`
+	Kind      string `help:"Filter by kind." predictor:"kind"`
 	Name      string `help:"Filter by name."`
 	Namespace string `short:"n" help:"Filter by namespace."`
 	Group     string `short:"g" help:"Filter by API group."`
@@ -425,8 +426,8 @@ func (cmd *DropCmd) Run(g *Globals) error {
 // SetNamespaceCmd overwrites metadata.namespace on matching manifests.
 type SetNamespaceCmd struct {
 	Namespace string `arg:"" help:"Namespace to set."`
-	Resource  string `arg:"" optional:"" help:"Resource filter (kind, kind/name, or api-group)."`
-	Kind      string `help:"Filter by kind."`
+	Resource  string `arg:"" optional:"" help:"Resource filter (kind, kind/name, or api-group)." predictor:"kind"`
+	Kind      string `help:"Filter by kind." predictor:"kind"`
 	Name      string `help:"Filter by name."`
 	OldNamespace string `name:"old-namespace" short:"n" help:"Filter by current namespace."`
 	Group     string `short:"g" help:"Filter by API group."`
@@ -481,6 +482,7 @@ type CLI struct {
 			Compact: true,
 			Summary: true,
 		}),
+		kong.DefaultEnvars(""),
 		kong.Bind(&Globals{
 			In:  os.Stdin,
 			Out: os.Stdout,
@@ -488,12 +490,10 @@ type CLI struct {
 	)
 
 	// Register completion support.
-	kongcompletion.Register(parser)
+	kongcompletion.Register(parser, kongcompletion.WithPredictor("kind", complete.PredictSet(engine.CommonKinds...)))
 
 	ctx, err := parser.Parse(os.Args[1:])
-	if err != nil {
-		parser.FatalIfErrorf(err)
-	}
+	parser.FatalIfErrorf(err)
 
 	err = ctx.Run()
 	ctx.FatalIfErrorf(err)
