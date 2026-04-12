@@ -10,6 +10,7 @@ import (
 	kongcompletion "github.com/jotaen/kong-completion"
 	"github.com/posener/complete"
 	"github.com/tobiash/k8q/internal/engine"
+	"github.com/tobiash/k8q/internal/serve"
 )
 
 // Globals holds injected streams and global flags.
@@ -455,6 +456,16 @@ func (cmd *SetNamespaceCmd) Run(g *Globals) error {
 	return runPipeline(g, f)
 }
 
+
+// ServeCmd starts a mock Kubernetes API server serving piped-in manifests.
+type ServeCmd struct {
+	Port    int      `name:"port" short:"p" help:"Port to bind (default: random ephemeral)." default:"0"`
+	Command []string `arg:"" optional:"" help:"Command and args to exec. Use -- to separate from k8q flags."`
+}
+
+func (cmd *ServeCmd) Run(g *Globals) error {
+	return serve.Run(g.In, cmd.Port, cmd.Command)
+}
 // CLI is the top-level Kong CLI struct.
 type CLI struct {
 	Get          GetCmd          `cmd:"" help:"Filter the stream to keep only matching manifests."`
@@ -470,9 +481,11 @@ type CLI struct {
 	SetNamespace SetNamespaceCmd    `cmd:"" help:"Overwrite metadata.namespace for matching manifests."`
 	Count        CountCmd           `cmd:"" help:"Count matching manifests."`
 	Sum          SumCmd             `cmd:"" help:"Sum CPU and Memory requests for matching manifests."`
+	Serve        ServeCmd           `cmd:"" help:"Start a mock Kubernetes API server for piped-in manifests."`
 	Completion   kongcompletion.Completion `cmd:"" help:"Print shell completion script."`
-	}
-	func main() {
+}
+
+func main() {
 	cli := &CLI{}
 	parser := kong.Must(cli,
 		kong.Name("k8q"),
@@ -496,5 +509,10 @@ type CLI struct {
 	parser.FatalIfErrorf(err)
 
 	err = ctx.Run()
-	ctx.FatalIfErrorf(err)
+	if err != nil {
+		if code, ok := serve.ExitCode(err); ok {
+			os.Exit(code)
+		}
+		ctx.FatalIfErrorf(err)
+	}
 }

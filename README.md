@@ -136,6 +136,38 @@ Modifies `metadata.name` by adding a prefix or suffix.
 k8q rename --suffix "-v2"
 ```
 
+### `serve` — Mock API server
+
+Starts an in-process mock Kubernetes API server that serves piped-in manifests over HTTPS. Writes a kubeconfig pointing to the server, then optionally executes a command with `KUBECONFIG` set. This lets cluster scanning tools connect to k8q as if it were a real cluster.
+
+```bash
+# Run kubectl against piped manifests
+helm template my-chart | k8q serve -- kubectl get deployments
+
+# Run popeye against a Helm chart
+helm template my-chart | k8q serve -- popeye
+
+# Run kubent against a Kustomize build
+kustomize build . | k8q serve -- kubent --cluster
+
+# Run trivy against manifests
+cat manifests.yaml | k8q serve -- trivy k8s --context k8q
+
+# Interactive mode — prints kubeconfig path, waits for Ctrl+C
+cat manifests.yaml | k8q serve
+```
+
+No cluster required. Pipe in manifests, run the tool, done.
+
+Flags:
+
+| Flag | Shorthand | Description |
+|---|---|---|
+| `--port` | `-p` | Port to bind (default: random ephemeral) |
+| `--` | | Separator; everything after is the command to exec |
+
+k8q exits with the child command's exit code. In interactive mode, press Ctrl+C to stop.
+
 ## Analyzers
 
 Analyzers provide insights about the stream. They typically terminate the pipeline by printing a report instead of YAML.
@@ -231,6 +263,7 @@ kustomize build . \
 |---|---|
 | CLI framework | [alecthomas/kong](https://github.com/alecthomas/kong) |
 | YAML engine | [kustomize/kyaml](https://github.com/kubernetes-sigs/kustomize/tree/master/kyaml) |
+| API server | `net/http` + `k8s.io/apimachinery` (zero additional dependencies) |
 | Env substitution | [drone/envsubst](https://github.com/drone/envsubst) |
 
 ## Shell Completion
