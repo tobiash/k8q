@@ -15,6 +15,12 @@ type SumOptions struct {
 	Match           MatchOptions
 	RequireRequests bool
 	RequireLimits   bool
+
+	// Thresholds for assertions.
+	MaxCPURequests string
+	MaxMemRequests string
+	MaxCPULimits   string
+	MaxMemLimits   string
 }
 
 // SumFilter returns a Filter that sums CPU and Memory requests/limits from
@@ -66,14 +72,41 @@ func SumFilter(opts SumOptions) Filter {
 		fmt.Printf("  CPU:    %s\n", limCPU.String())
 		fmt.Printf("  Memory: %s\n", formatMemory(limMem))
 
+		// Assertions.
+		if err := assertThreshold("CPU Requests", reqCPU, opts.MaxCPURequests); err != nil {
+			return nil, err
+		}
+		if err := assertThreshold("Memory Requests", reqMem, opts.MaxMemRequests); err != nil {
+			return nil, err
+		}
+		if err := assertThreshold("CPU Limits", limCPU, opts.MaxCPULimits); err != nil {
+			return nil, err
+		}
+		if err := assertThreshold("Memory Limits", limMem, opts.MaxMemLimits); err != nil {
+			return nil, err
+		}
+
 		return nil, nil // Terminate pipeline
 	}
 }
 
+func assertThreshold(label string, actual *resource.Quantity, thresholdStr string) error {
+	if thresholdStr == "" {
+		return nil
+	}
+	threshold, err := resource.ParseQuantity(thresholdStr)
+	if err != nil {
+		return fmt.Errorf("invalid threshold for %s: %w", label, err)
+	}
+
+	if actual.Cmp(threshold) > 0 {
+		return fmt.Errorf("%s threshold exceeded: got %s, max %s", label, actual.String(), threshold.String())
+	}
+	return nil
+}
+
 // formatMemory ensures memory is printed in a sane unit (fallback to Gi/Mi if large).
 func formatMemory(q *resource.Quantity) string {
-	// If it has a milli-part (unusual for memory), String() might be ugly.
-	// But mostly we just want to ensure it's readable.
 	val := q.Value() // bytes
 	if val == 0 {
 		return "0"

@@ -358,6 +358,10 @@ type SumCmd struct {
 	Selector        string `short:"l" help:"Label selector."`
 	RequireRequests bool   `name:"require-requests" help:"Error if any matching container is missing resource requests."`
 	RequireLimits   bool   `name:"require-limits" help:"Error if any matching container is missing resource limits."`
+	MaxCPURequests  string `name:"max-cpu-requests" help:"Error if total CPU requests exceed this value."`
+	MaxMemRequests  string `name:"max-mem-requests" help:"Error if total memory requests exceed this value."`
+	MaxCPULimits    string `name:"max-cpu-limits" help:"Error if total CPU limits exceed this value."`
+	MaxMemLimits    string `name:"max-mem-limits" help:"Error if total memory limits exceed this value."`
 }
 
 func (cmd *SumCmd) Run(g *Globals) error {
@@ -369,6 +373,10 @@ func (cmd *SumCmd) Run(g *Globals) error {
 	f := engine.SumFilter(engine.SumOptions{
 		RequireRequests: cmd.RequireRequests,
 		RequireLimits:   cmd.RequireLimits,
+		MaxCPURequests:  cmd.MaxCPURequests,
+		MaxMemRequests:  cmd.MaxMemRequests,
+		MaxCPULimits:    cmd.MaxCPULimits,
+		MaxMemLimits:    cmd.MaxMemLimits,
 		Match: engine.MatchOptions{
 			Resource:  cmd.Resource,
 			Kind:      cmd.Kind,

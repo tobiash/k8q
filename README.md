@@ -168,6 +168,9 @@ k8q sum --namespace production
 
 # Fail if any container is missing requests or limits
 k8q sum --require-requests --require-limits
+
+# Assert total resources are within bounds (exits 1 if exceeded)
+k8q sum --max-cpu-requests 2000m --max-mem-limits 10Gi
 ```
 
 ## Match Criteria
