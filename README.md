@@ -233,6 +233,20 @@ kustomize build . \
 | YAML engine | [kustomize/kyaml](https://github.com/kubernetes-sigs/kustomize/tree/master/kyaml) |
 | Env substitution | [drone/envsubst](https://github.com/drone/envsubst) |
 
+## Shell Completion
+
+To enable shell completion, add the following to your shell profile (`.bashrc` or `.zshrc`):
+
+**Bash:**
+```bash
+source <(k8q completion -c bash)
+```
+
+**Zsh:**
+```zsh
+source <(k8q completion -c zsh)
+```
+
 ## License
 
 See [LICENSE](LICENSE).

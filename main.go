@@ -7,6 +7,7 @@ import (
 
 	"github.com/alecthomas/kong"
 	"github.com/drone/envsubst/v2"
+	"github.com/jotaen/kong-completion"
 	"github.com/tobiash/k8q/internal/engine"
 )
 
@@ -465,13 +466,14 @@ type CLI struct {
 	Remove       RemoveCmd       `cmd:"" help:"Delete a field from matching manifests."`
 	Scale        ScaleCmd        `cmd:"" help:"Update spec.replicas for matching manifests."`
 	Rename       RenameCmd       `cmd:"" help:"Prefix or suffix metadata.name for matching manifests."`
-	SetNamespace SetNamespaceCmd `cmd:"" help:"Overwrite metadata.namespace for matching manifests."`
-	Count        CountCmd        `cmd:"" help:"Count matching manifests."`
-	Sum          SumCmd          `cmd:"" help:"Sum CPU and Memory requests for matching manifests."`
-}
-
-func main() {
-	parser := kong.Must(&CLI{},
+	SetNamespace SetNamespaceCmd    `cmd:"" help:"Overwrite metadata.namespace for matching manifests."`
+	Count        CountCmd           `cmd:"" help:"Count matching manifests."`
+	Sum          SumCmd             `cmd:"" help:"Sum CPU and Memory requests for matching manifests."`
+	Completion   kongcompletion.Completion `cmd:"" help:"Print shell completion script."`
+	}
+	func main() {
+	cli := &CLI{}
+	parser := kong.Must(cli,
 		kong.Name("k8q"),
 		kong.Description("A Unix-style pipe for filtering, mutating, and exploring Kubernetes YAML manifests."),
 		kong.UsageOnError(),
@@ -484,6 +486,9 @@ func main() {
 			Out: os.Stdout,
 		}),
 	)
+
+	// Register completion support.
+	kongcompletion.Register(parser)
 
 	ctx, err := parser.Parse(os.Args[1:])
 	if err != nil {
