@@ -100,7 +100,11 @@ func assertThreshold(label string, actual *resource.Quantity, thresholdStr strin
 	}
 
 	if actual.Cmp(threshold) > 0 {
-		return fmt.Errorf("%s threshold exceeded: got %s, max %s", label, actual.String(), threshold.String())
+		actualStr := actual.String()
+		if strings.Contains(label, "Memory") {
+			actualStr = formatMemory(actual)
+		}
+		return fmt.Errorf("%s threshold exceeded: got %s, max %s", label, actualStr, threshold.String())
 	}
 	return nil
 }
