@@ -17,14 +17,16 @@ type SumOptions struct {
 	RequireLimits   bool
 }
 
-// SumFilter returns a Filter that sums CPU and Memory requests from
-// matching manifests (looking in Pod templates).
+// SumFilter returns a Filter that sums CPU and Memory requests/limits from
+// matching manifests.
 func SumFilter(opts SumOptions) Filter {
 	return func(nodes []*yaml.RNode) ([]*yaml.RNode, error) {
-		totalCPU := resource.NewQuantity(0, resource.DecimalSI)
-		totalMem := resource.NewQuantity(0, resource.BinarySI)
+		reqCPU := resource.NewQuantity(0, resource.DecimalSI)
+		reqMem := resource.NewQuantity(0, resource.BinarySI)
+		limCPU := resource.NewQuantity(0, resource.DecimalSI)
+		limMem := resource.NewQuantity(0, resource.BinarySI)
 
-		var missingReqs []string
+		var missingCount int
 
 		for _, node := range nodes {
 			meta, err := node.GetMeta()
@@ -33,34 +35,64 @@ func SumFilter(opts SumOptions) Filter {
 			}
 
 			if Match(meta, opts.Match) {
-				cpu, mem := getPodResources(node)
-
 				// Check for missing resources if required.
 				if opts.RequireRequests || opts.RequireLimits {
 					if err := checkResources(node, opts.RequireRequests, opts.RequireLimits); err != nil {
 						fmt.Fprintf(os.Stderr, "Error: %s/%s: %v\n", meta.Kind, meta.Name, err)
-						missingReqs = append(missingReqs, meta.Name) // Track that we had an error
+						missingCount++
 					}
 				}
 
-				// Multiply by replicas if present.
+				r, l := getPodResources(node)
 				replicas := getReplicas(node)
+
 				for i := 0; i < replicas; i++ {
-					totalCPU.Add(cpu)
-					totalMem.Add(mem)
+					reqCPU.Add(r.cpu)
+					reqMem.Add(r.mem)
+					limCPU.Add(l.cpu)
+					limMem.Add(l.mem)
 				}
 			}
 		}
 
-		if (opts.RequireRequests || opts.RequireLimits) && len(missingReqs) > 0 {
-			return nil, fmt.Errorf("resource requirements check failed")
+		if (opts.RequireRequests || opts.RequireLimits) && missingCount > 0 {
+			return nil, fmt.Errorf("resource requirements check failed for %d resources", missingCount)
 		}
 
-		fmt.Printf("CPU:    %s\n", totalCPU.String())
-		fmt.Printf("Memory: %s\n", totalMem.String())
+		fmt.Println("Requests:")
+		fmt.Printf("  CPU:    %s\n", reqCPU.String())
+		fmt.Printf("  Memory: %s\n", formatMemory(reqMem))
+		fmt.Println("Limits:")
+		fmt.Printf("  CPU:    %s\n", limCPU.String())
+		fmt.Printf("  Memory: %s\n", formatMemory(limMem))
 
 		return nil, nil // Terminate pipeline
 	}
+}
+
+// formatMemory ensures memory is printed in a sane unit (fallback to Gi/Mi if large).
+func formatMemory(q *resource.Quantity) string {
+	// If it has a milli-part (unusual for memory), String() might be ugly.
+	// But mostly we just want to ensure it's readable.
+	val := q.Value() // bytes
+	if val == 0 {
+		return "0"
+	}
+
+	// Prefer Gi if >= 1Gi
+	if val >= 1024*1024*1024 {
+		return fmt.Sprintf("%.2f Gi", float64(val)/(1024*1024*1024))
+	}
+	// Prefer Mi if >= 1Mi
+	if val >= 1024*1024 {
+		return fmt.Sprintf("%.2f Mi", float64(val)/(1024*1024))
+	}
+	return q.String()
+}
+
+type resourcePair struct {
+	cpu resource.Quantity
+	mem resource.Quantity
 }
 
 func checkResources(node *yaml.RNode, reqReqs, reqLimits bool) error {
@@ -124,9 +156,7 @@ func getReplicas(node *yaml.RNode) int {
 	return val
 }
 
-func getPodResources(node *yaml.RNode) (cpu, mem resource.Quantity) {
-	var totalCPU, totalMem resource.Quantity
-
+func getPodResources(node *yaml.RNode) (req, lim resourcePair) {
 	containerPaths := [][]string{
 		{"spec", "containers"},
 		{"spec", "template", "spec", "containers"},
@@ -140,16 +170,29 @@ func getPodResources(node *yaml.RNode) (cpu, mem resource.Quantity) {
 		}
 
 		_ = containers.VisitElements(func(container *yaml.RNode) error {
-			// Check requests.
-			if reqs, err := container.Pipe(yaml.Lookup("resources", "requests")); err == nil && !yaml.IsMissingOrNull(reqs) {
-				if c, err := reqs.Pipe(yaml.Lookup("cpu")); err == nil && !yaml.IsMissingOrNull(c) {
+			// Requests
+			if r, err := container.Pipe(yaml.Lookup("resources", "requests")); err == nil && !yaml.IsMissingOrNull(r) {
+				if c, err := r.Pipe(yaml.Lookup("cpu")); err == nil && !yaml.IsMissingOrNull(c) {
 					if q, err := resource.ParseQuantity(strings.TrimSpace(c.MustString())); err == nil {
-						totalCPU.Add(q)
+						req.cpu.Add(q)
 					}
 				}
-				if m, err := reqs.Pipe(yaml.Lookup("memory")); err == nil && !yaml.IsMissingOrNull(m) {
+				if m, err := r.Pipe(yaml.Lookup("memory")); err == nil && !yaml.IsMissingOrNull(m) {
 					if q, err := resource.ParseQuantity(strings.TrimSpace(m.MustString())); err == nil {
-						totalMem.Add(q)
+						req.mem.Add(q)
+					}
+				}
+			}
+			// Limits
+			if l, err := container.Pipe(yaml.Lookup("resources", "limits")); err == nil && !yaml.IsMissingOrNull(l) {
+				if c, err := l.Pipe(yaml.Lookup("cpu")); err == nil && !yaml.IsMissingOrNull(c) {
+					if q, err := resource.ParseQuantity(strings.TrimSpace(c.MustString())); err == nil {
+						lim.cpu.Add(q)
+					}
+				}
+				if m, err := l.Pipe(yaml.Lookup("memory")); err == nil && !yaml.IsMissingOrNull(m) {
+					if q, err := resource.ParseQuantity(strings.TrimSpace(m.MustString())); err == nil {
+						lim.mem.Add(q)
 					}
 				}
 			}
@@ -157,5 +200,5 @@ func getPodResources(node *yaml.RNode) (cpu, mem resource.Quantity) {
 		})
 	}
 
-	return totalCPU, totalMem
+	return req, lim
 }
