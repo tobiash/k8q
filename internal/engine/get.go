@@ -10,7 +10,7 @@ import (
 // GetOptions configures the get filter.
 type GetOptions struct {
 	// Resource is a positional filter: "kind", "kind/name", or "api-group".
-	Resource  string
+	Resource string
 	// Kind, Name, Namespace, Group, and Selector define the filter criteria.
 	Kind      string
 	Name      string

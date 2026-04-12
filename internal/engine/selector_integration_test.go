@@ -281,7 +281,7 @@ func TestSelectorFilterStandalone(t *testing.T) {
 		t.Fatalf("Pipeline() error: %v", err)
 	}
 
-	nodes, err := ReadNodes(bytes.NewReader([]byte(out.String())))
+	nodes, err := ReadNodes(bytes.NewReader(out.Bytes()))
 	if err != nil {
 		t.Fatalf("re-parsing output: %v", err)
 	}

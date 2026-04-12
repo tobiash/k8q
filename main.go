@@ -9,6 +9,7 @@ import (
 	"github.com/drone/envsubst/v2"
 	kongcompletion "github.com/jotaen/kong-completion"
 	"github.com/posener/complete"
+
 	"github.com/tobiash/k8q/internal/engine"
 	"github.com/tobiash/k8q/internal/serve"
 )
@@ -30,6 +31,7 @@ type GetCmd struct {
 	Selector  string `short:"l" help:"Label selector (e.g. app=web,env!=staging,tier in (frontend,backend))."`
 }
 
+// Run executes the get command.
 func (cmd *GetCmd) Run(g *Globals) error {
 	sel, err := engine.ParseSelectorFlag(cmd.Selector)
 	if err != nil {
@@ -55,6 +57,7 @@ type SubstCmd struct {
 	EnvFile string `flag:"--env-file" required:"" help:"Path to .env file." type:"path"`
 }
 
+// Run executes the subst command.
 func (cmd *SubstCmd) Run(g *Globals) error {
 	raw, err := io.ReadAll(g.In)
 	if err != nil {
@@ -92,6 +95,7 @@ type LabelCmd struct {
 	Selector  string `short:"l" help:"Label selector (e.g. app=web,env!=staging,tier in (frontend,backend))."`
 }
 
+// Run executes the label command.
 func (cmd *LabelCmd) Run(g *Globals) error {
 	sel, err := engine.ParseSelectorFlag(cmd.Selector)
 	if err != nil {
@@ -127,6 +131,7 @@ type AnnotateCmd struct {
 	Selector   string `short:"l" help:"Label selector."`
 }
 
+// Run executes the annotate command.
 func (cmd *AnnotateCmd) Run(g *Globals) error {
 	sel, err := engine.ParseSelectorFlag(cmd.Selector)
 	if err != nil {
@@ -162,6 +167,7 @@ type SetImageCmd struct {
 	Selector  string `short:"l" help:"Label selector."`
 }
 
+// Run executes the set-image command.
 func (cmd *SetImageCmd) Run(g *Globals) error {
 	sel, err := engine.ParseSelectorFlag(cmd.Selector)
 	if err != nil {
@@ -197,6 +203,7 @@ type PatchCmd struct {
 	Selector  string `short:"l" help:"Label selector."`
 }
 
+// Run executes the patch command.
 func (cmd *PatchCmd) Run(g *Globals) error {
 	sel, err := engine.ParseSelectorFlag(cmd.Selector)
 	if err != nil {
@@ -232,6 +239,7 @@ type RemoveCmd struct {
 	Selector  string `short:"l" help:"Label selector."`
 }
 
+// Run executes the remove command.
 func (cmd *RemoveCmd) Run(g *Globals) error {
 	sel, err := engine.ParseSelectorFlag(cmd.Selector)
 	if err != nil {
@@ -264,6 +272,7 @@ type ScaleCmd struct {
 	Selector  string `short:"l" help:"Label selector."`
 }
 
+// Run executes the scale command.
 func (cmd *ScaleCmd) Run(g *Globals) error {
 	sel, err := engine.ParseSelectorFlag(cmd.Selector)
 	if err != nil {
@@ -297,6 +306,7 @@ type RenameCmd struct {
 	Selector  string `short:"l" help:"Label selector."`
 }
 
+// Run executes the rename command.
 func (cmd *RenameCmd) Run(g *Globals) error {
 	sel, err := engine.ParseSelectorFlag(cmd.Selector)
 	if err != nil {
@@ -330,6 +340,7 @@ type CountCmd struct {
 	GroupByKind bool   `name:"group-by-kind" help:"Group counts by resource kind."`
 }
 
+// Run executes the count command.
 func (cmd *CountCmd) Run(g *Globals) error {
 	sel, err := engine.ParseSelectorFlag(cmd.Selector)
 	if err != nil {
@@ -367,6 +378,7 @@ type SumCmd struct {
 	MaxMemLimits    string `name:"max-mem-limits" help:"Error if total memory limits exceed this value."`
 }
 
+// Run executes the sum command.
 func (cmd *SumCmd) Run(g *Globals) error {
 	sel, err := engine.ParseSelectorFlag(cmd.Selector)
 	if err != nil {
@@ -403,6 +415,7 @@ type DropCmd struct {
 	Selector  string `short:"l" help:"Label selector -- matching manifests are dropped."`
 }
 
+// Run executes the drop command.
 func (cmd *DropCmd) Run(g *Globals) error {
 	sel, err := engine.ParseSelectorFlag(cmd.Selector)
 	if err != nil {
@@ -426,15 +439,16 @@ func (cmd *DropCmd) Run(g *Globals) error {
 
 // SetNamespaceCmd overwrites metadata.namespace on matching manifests.
 type SetNamespaceCmd struct {
-	Namespace string `arg:"" help:"Namespace to set."`
-	Resource  string `arg:"" optional:"" help:"Resource filter (kind, kind/name, or api-group)." predictor:"kind"`
-	Kind      string `help:"Filter by kind." predictor:"kind"`
-	Name      string `help:"Filter by name."`
+	Namespace    string `arg:"" help:"Namespace to set."`
+	Resource     string `arg:"" optional:"" help:"Resource filter (kind, kind/name, or api-group)." predictor:"kind"`
+	Kind         string `help:"Filter by kind." predictor:"kind"`
+	Name         string `help:"Filter by name."`
 	OldNamespace string `name:"old-namespace" short:"n" help:"Filter by current namespace."`
-	Group     string `short:"g" help:"Filter by API group."`
-	Selector  string `short:"l" help:"Label selector (e.g. app=web,env!=staging,tier in (frontend,backend))."`
+	Group        string `short:"g" help:"Filter by API group."`
+	Selector     string `short:"l" help:"Label selector (e.g. app=web,env!=staging,tier in (frontend,backend))."`
 }
 
+// Run executes the set-namespace command.
 func (cmd *SetNamespaceCmd) Run(g *Globals) error {
 	sel, err := engine.ParseSelectorFlag(cmd.Selector)
 	if err != nil {
@@ -456,32 +470,33 @@ func (cmd *SetNamespaceCmd) Run(g *Globals) error {
 	return runPipeline(g, f)
 }
 
-
 // ServeCmd starts a mock Kubernetes API server serving piped-in manifests.
 type ServeCmd struct {
 	Port    int      `name:"port" short:"p" help:"Port to bind (default: random ephemeral)." default:"0"`
 	Command []string `arg:"" optional:"" help:"Command and args to exec. Use -- to separate from k8q flags."`
 }
 
+// Run starts the mock API server.
 func (cmd *ServeCmd) Run(g *Globals) error {
 	return serve.Run(g.In, cmd.Port, cmd.Command)
 }
+
 // CLI is the top-level Kong CLI struct.
 type CLI struct {
-	Get          GetCmd          `cmd:"" help:"Filter the stream to keep only matching manifests."`
-	Drop         DropCmd         `cmd:"" help:"Filter the stream to remove matching manifests."`
-	Subst        SubstCmd        `cmd:"" help:"Substitute environment variables from an .env file."`
-	Label        LabelCmd        `cmd:"" help:"Inject a label into matching manifests."`
-	Annotate     AnnotateCmd     `cmd:"" help:"Inject an annotation into matching manifests."`
-	SetImage     SetImageCmd     `cmd:"" help:"Update container images in matching manifests."`
-	Patch        PatchCmd        `cmd:"" help:"Merge a YAML patch into matching manifests."`
-	Remove       RemoveCmd       `cmd:"" help:"Delete a field from matching manifests."`
-	Scale        ScaleCmd        `cmd:"" help:"Update spec.replicas for matching manifests."`
-	Rename       RenameCmd       `cmd:"" help:"Prefix or suffix metadata.name for matching manifests."`
-	SetNamespace SetNamespaceCmd    `cmd:"" help:"Overwrite metadata.namespace for matching manifests."`
-	Count        CountCmd           `cmd:"" help:"Count matching manifests."`
-	Sum          SumCmd             `cmd:"" help:"Sum CPU and Memory requests for matching manifests."`
-	Serve        ServeCmd           `cmd:"" help:"Start a mock Kubernetes API server for piped-in manifests."`
+	Get          GetCmd                    `cmd:"" help:"Filter the stream to keep only matching manifests."`
+	Drop         DropCmd                   `cmd:"" help:"Filter the stream to remove matching manifests."`
+	Subst        SubstCmd                  `cmd:"" help:"Substitute environment variables from an .env file."`
+	Label        LabelCmd                  `cmd:"" help:"Inject a label into matching manifests."`
+	Annotate     AnnotateCmd               `cmd:"" help:"Inject an annotation into matching manifests."`
+	SetImage     SetImageCmd               `cmd:"" help:"Update container images in matching manifests."`
+	Patch        PatchCmd                  `cmd:"" help:"Merge a YAML patch into matching manifests."`
+	Remove       RemoveCmd                 `cmd:"" help:"Delete a field from matching manifests."`
+	Scale        ScaleCmd                  `cmd:"" help:"Update spec.replicas for matching manifests."`
+	Rename       RenameCmd                 `cmd:"" help:"Prefix or suffix metadata.name for matching manifests."`
+	SetNamespace SetNamespaceCmd           `cmd:"" help:"Overwrite metadata.namespace for matching manifests."`
+	Count        CountCmd                  `cmd:"" help:"Count matching manifests."`
+	Sum          SumCmd                    `cmd:"" help:"Sum CPU and Memory requests for matching manifests."`
+	Serve        ServeCmd                  `cmd:"" help:"Start a mock Kubernetes API server for piped-in manifests."`
 	Completion   kongcompletion.Completion `cmd:"" help:"Print shell completion script."`
 }
 

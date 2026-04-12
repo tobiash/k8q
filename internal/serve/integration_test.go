@@ -8,6 +8,7 @@ import (
 	"encoding/json"
 	"encoding/pem"
 	"io"
+	"net"
 	"net/http"
 	"os"
 	"os/exec"
@@ -66,10 +67,19 @@ func startTestServer(t *testing.T, manifests string) (*Server, *http.Client) {
 		t.Fatalf("NewServer: %v", err)
 	}
 
-	go srv.Serve()
+	go func() { _ = srv.Serve() }()
 
-	// Give the server a moment to bind.
-	time.Sleep(50 * time.Millisecond)
+	// Wait for the server to accept connections.
+	_, port, _ := net.SplitHostPort(srv.Addr())
+	addr := "127.0.0.1:" + port
+	for i := 0; i < 100; i++ {
+		conn, err := tls.DialWithDialer(&net.Dialer{Timeout: 10 * time.Millisecond}, "tcp", addr, &tls.Config{InsecureSkipVerify: true}) //nolint:gosec
+		if err == nil {
+			_ = conn.Close()
+			break
+		}
+		time.Sleep(10 * time.Millisecond)
+	}
 
 	// Build an HTTP client that trusts the server's self-signed CA.
 	caCertPool := x509.NewCertPool()
@@ -80,7 +90,8 @@ func startTestServer(t *testing.T, manifests string) (*Server, *http.Client) {
 	client := &http.Client{
 		Transport: &http.Transport{
 			TLSClientConfig: &tls.Config{
-				RootCAs: caCertPool,
+				RootCAs:    caCertPool,
+				MinVersion: tls.VersionTLS12,
 			},
 		},
 		Timeout: 5 * time.Second,
@@ -88,7 +99,6 @@ func startTestServer(t *testing.T, manifests string) (*Server, *http.Client) {
 
 	return srv, client
 }
-
 
 func get(t *testing.T, client *http.Client, url string) *http.Response {
 	t.Helper()
@@ -123,7 +133,7 @@ func post(t *testing.T, client *http.Client, url string, body string) *http.Resp
 
 func readBody(t *testing.T, resp *http.Response) []byte {
 	t.Helper()
-	defer resp.Body.Close()
+	defer func() { _ = resp.Body.Close() }()
 	b, err := io.ReadAll(resp.Body)
 	if err != nil {
 		t.Fatalf("reading response body: %v", err)
@@ -154,11 +164,12 @@ func decodePEMBlocks(pemData []byte) []*pem.Block {
 
 // --- TestServerDirect ---
 
+//nolint:gocyclo
 func TestServerDirect(t *testing.T) {
 	t.Parallel()
 
 	srv, client := startTestServer(t, testManifests)
-	defer srv.Shutdown(context.Background())
+	defer func() { _ = srv.Shutdown(context.Background()) }()
 	defer srv.Cleanup()
 
 	base := "https://" + srv.Addr()
@@ -445,7 +456,7 @@ func TestServerDirect(t *testing.T) {
 		if _, err := os.Stat(path); err != nil {
 			t.Fatalf("kubeconfig file does not exist at %s: %v", path, err)
 		}
-		data, err := os.ReadFile(path)
+		data, err := os.ReadFile(path) //nolint:gosec
 		if err != nil {
 			t.Fatalf("reading kubeconfig: %v", err)
 		}
@@ -496,7 +507,7 @@ func TestKubectlIntegration(t *testing.T) {
 		t.Fatalf("cannot find go.mod at %s: %v", goMod, err)
 	}
 
-	buildCmd := exec.Command("go", "build", "-o", binPath, ".")
+	buildCmd := exec.Command("go", "build", "-o", binPath, ".") //nolint:gosec
 	buildCmd.Dir = repoRoot
 	buildCmd.Stdout = os.Stderr
 	buildCmd.Stderr = os.Stderr
@@ -505,7 +516,7 @@ func TestKubectlIntegration(t *testing.T) {
 	}
 
 	srv, _ := startTestServer(t, testManifests)
-	defer srv.Shutdown(context.Background())
+	defer func() { _ = srv.Shutdown(context.Background()) }()
 	defer srv.Cleanup()
 
 	base := "https://" + srv.Addr()
@@ -513,7 +524,7 @@ func TestKubectlIntegration(t *testing.T) {
 	// kubectl needs to trust the server's CA. Write the CA cert to a temp file
 	// and pass it via --certificate-authority.
 	caCertPath := filepath.Join(tmpDir, "ca.crt")
-	if err := os.WriteFile(caCertPath, srv.caCert, 0644); err != nil {
+	if err := os.WriteFile(caCertPath, srv.caCert, 0600); err != nil {
 		t.Fatalf("writing CA cert: %v", err)
 	}
 
@@ -529,7 +540,7 @@ func TestKubectlIntegration(t *testing.T) {
 		}, args...)
 		ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
 		defer cancel()
-		cmd := exec.CommandContext(ctx, "kubectl", allArgs...)
+		cmd := exec.CommandContext(ctx, "kubectl", allArgs...) //nolint:gosec
 		var stdout, stderr bytes.Buffer
 		cmd.Stdout = &stdout
 		cmd.Stderr = &stderr
@@ -573,7 +584,7 @@ func TestKubectlIntegration(t *testing.T) {
 
 		ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
 		defer cancel()
-		cmd := exec.CommandContext(ctx, "kubectl",
+		cmd := exec.CommandContext(ctx, "kubectl", //nolint:gosec
 			"--kubeconfig="+kubeconfigPath,
 			"get", "deployments", "-o", "name", "-n", "default",
 		)

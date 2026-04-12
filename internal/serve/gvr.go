@@ -47,6 +47,8 @@ func LookupType(gvk GVK) TypeInfo {
 
 // Pluralize applies English pluralization rules to a kind name,
 // returning the lowercase plural form.
+//
+//nolint:gocyclo
 func Pluralize(kind string) string {
 	s := strings.ToLower(kind)
 	if s == "" {
@@ -62,7 +64,7 @@ func Pluralize(kind string) string {
 
 	// Words ending in -is → -es (e.g. "axis" → "axes").
 	// But not -sis (handled above) or -lis/-nis etc.
-	if n > 2 && s[n-2] == 'i' && s[n-1] == 's' && !(n > 3 && s[n-3] == 's') {
+	if n > 2 && s[n-2] == 'i' && s[n-1] == 's' && (n <= 3 || s[n-3] != 's') {
 		return s[:n-2] + "es"
 	}
 
@@ -92,22 +94,22 @@ func isVowel(r rune) bool {
 // Group names are lowercase, versions are exact, kinds are PascalCase.
 var knownTypes = map[GVK]TypeInfo{
 	// Core v1
-	{"", "v1", "Binding"}:                {"bindings", true},
-	{"", "v1", "ConfigMap"}:              {"configmaps", true},
-	{"", "v1", "Endpoints"}:              {"endpoints", true},
-	{"", "v1", "Event"}:                  {"events", true},
-	{"", "v1", "LimitRange"}:             {"limitranges", true},
-	{"", "v1", "Namespace"}:              {"namespaces", false},
-	{"", "v1", "Node"}:                   {"nodes", false},
-	{"", "v1", "PersistentVolume"}:       {"persistentvolumes", false},
-	{"", "v1", "PersistentVolumeClaim"}:  {"persistentvolumeclaims", true},
-	{"", "v1", "Pod"}:                    {"pods", true},
-	{"", "v1", "PodTemplate"}:            {"podtemplates", true},
-	{"", "v1", "ReplicationController"}:  {"replicationcontrollers", true},
-	{"", "v1", "ResourceQuota"}:          {"resourcequotas", true},
-	{"", "v1", "Secret"}:                 {"secrets", true},
-	{"", "v1", "Service"}:                {"services", true},
-	{"", "v1", "ServiceAccount"}:         {"serviceaccounts", true},
+	{"", "v1", "Binding"}:               {"bindings", true},
+	{"", "v1", "ConfigMap"}:             {"configmaps", true},
+	{"", "v1", "Endpoints"}:             {"endpoints", true},
+	{"", "v1", "Event"}:                 {"events", true},
+	{"", "v1", "LimitRange"}:            {"limitranges", true},
+	{"", "v1", "Namespace"}:             {"namespaces", false},
+	{"", "v1", "Node"}:                  {"nodes", false},
+	{"", "v1", "PersistentVolume"}:      {"persistentvolumes", false},
+	{"", "v1", "PersistentVolumeClaim"}: {"persistentvolumeclaims", true},
+	{"", "v1", "Pod"}:                   {"pods", true},
+	{"", "v1", "PodTemplate"}:           {"podtemplates", true},
+	{"", "v1", "ReplicationController"}: {"replicationcontrollers", true},
+	{"", "v1", "ResourceQuota"}:         {"resourcequotas", true},
+	{"", "v1", "Secret"}:                {"secrets", true},
+	{"", "v1", "Service"}:               {"services", true},
+	{"", "v1", "ServiceAccount"}:        {"serviceaccounts", true},
 
 	// apps/v1
 	{"apps", "v1", "ControllerRevision"}: {"controllerrevisions", true},
@@ -117,8 +119,8 @@ var knownTypes = map[GVK]TypeInfo{
 	{"apps", "v1", "StatefulSet"}:        {"statefulsets", true},
 
 	// autoscaling
-	{"autoscaling", "v1", "HorizontalPodAutoscaler"}:  {"horizontalpodautoscalers", true},
-	{"autoscaling", "v2", "HorizontalPodAutoscaler"}:  {"horizontalpodautoscalers", true},
+	{"autoscaling", "v1", "HorizontalPodAutoscaler"}:      {"horizontalpodautoscalers", true},
+	{"autoscaling", "v2", "HorizontalPodAutoscaler"}:      {"horizontalpodautoscalers", true},
 	{"autoscaling", "v2beta1", "HorizontalPodAutoscaler"}: {"horizontalpodautoscalers", true},
 	{"autoscaling", "v2beta2", "HorizontalPodAutoscaler"}: {"horizontalpodautoscalers", true},
 
@@ -139,7 +141,7 @@ var knownTypes = map[GVK]TypeInfo{
 	{"events.k8s.io", "v1", "Event"}: {"events", true},
 
 	// networking.k8s.io
-	{"networking.k8s.io", "v1", "Ingress"}:      {"ingresses", true},
+	{"networking.k8s.io", "v1", "Ingress"}:       {"ingresses", true},
 	{"networking.k8s.io", "v1", "IngressClass"}:  {"ingressclasses", false},
 	{"networking.k8s.io", "v1", "NetworkPolicy"}: {"networkpolicies", true},
 
@@ -151,16 +153,16 @@ var knownTypes = map[GVK]TypeInfo{
 
 	// rbac.authorization.k8s.io
 	{"rbac.authorization.k8s.io", "v1", "ClusterRole"}:        {"clusterroles", false},
-	{"rbac.authorization.k8s.io", "v1", "ClusterRoleBinding"}:  {"clusterrolebindings", false},
-	{"rbac.authorization.k8s.io", "v1", "Role"}:                {"roles", true},
-	{"rbac.authorization.k8s.io", "v1", "RoleBinding"}:         {"rolebindings", true},
+	{"rbac.authorization.k8s.io", "v1", "ClusterRoleBinding"}: {"clusterrolebindings", false},
+	{"rbac.authorization.k8s.io", "v1", "Role"}:               {"roles", true},
+	{"rbac.authorization.k8s.io", "v1", "RoleBinding"}:        {"rolebindings", true},
 
 	// storage.k8s.io
 	{"storage.k8s.io", "v1", "CSIDriver"}:          {"csidrivers", false},
-	{"storage.k8s.io", "v1", "CSINode"}:             {"csinodes", false},
-	{"storage.k8s.io", "v1", "CSIStorageCapacity"}:  {"csistoragecapacities", true},
-	{"storage.k8s.io", "v1", "StorageClass"}:        {"storageclasses", false},
-	{"storage.k8s.io", "v1", "VolumeAttachment"}:    {"volumeattachments", false},
+	{"storage.k8s.io", "v1", "CSINode"}:            {"csinodes", false},
+	{"storage.k8s.io", "v1", "CSIStorageCapacity"}: {"csistoragecapacities", true},
+	{"storage.k8s.io", "v1", "StorageClass"}:       {"storageclasses", false},
+	{"storage.k8s.io", "v1", "VolumeAttachment"}:   {"volumeattachments", false},
 
 	// apiextensions.k8s.io
 	{"apiextensions.k8s.io", "v1", "CustomResourceDefinition"}: {"customresourcedefinitions", false},
@@ -169,10 +171,10 @@ var knownTypes = map[GVK]TypeInfo{
 	{"scheduling.k8s.io", "v1", "PriorityClass"}: {"priorityclasses", false},
 
 	// admissionregistration.k8s.io
-	{"admissionregistration.k8s.io", "v1", "MutatingWebhookConfiguration"}:          {"mutatingwebhookconfigurations", false},
-	{"admissionregistration.k8s.io", "v1", "ValidatingAdmissionPolicy"}:             {"validatingadmissionpolicies", false},
-	{"admissionregistration.k8s.io", "v1", "ValidatingAdmissionPolicyBinding"}:      {"validatingadmissionpolicybindings", false},
-	{"admissionregistration.k8s.io", "v1", "ValidatingWebhookConfiguration"}:        {"validatingwebhookconfigurations", false},
+	{"admissionregistration.k8s.io", "v1", "MutatingWebhookConfiguration"}:     {"mutatingwebhookconfigurations", false},
+	{"admissionregistration.k8s.io", "v1", "ValidatingAdmissionPolicy"}:        {"validatingadmissionpolicies", false},
+	{"admissionregistration.k8s.io", "v1", "ValidatingAdmissionPolicyBinding"}: {"validatingadmissionpolicybindings", false},
+	{"admissionregistration.k8s.io", "v1", "ValidatingWebhookConfiguration"}:   {"validatingwebhookconfigurations", false},
 
 	// authorization.k8s.io
 	{"authorization.k8s.io", "v1", "LocalSubjectAccessReview"}: {"localsubjectaccessreviews", true},
@@ -185,32 +187,32 @@ var knownTypes = map[GVK]TypeInfo{
 	{"authentication.k8s.io", "v1", "TokenRequest"}: {"tokenrequests", false},
 
 	// gateway.networking.k8s.io
-	{"gateway.networking.k8s.io", "v1", "GatewayClass"}:    {"gatewayclasses", false},
-	{"gateway.networking.k8s.io", "v1", "Gateway"}:         {"gateways", true},
-	{"gateway.networking.k8s.io", "v1", "HTTPRoute"}:       {"httproutes", true},
-	{"gateway.networking.k8s.io", "v1", "GRPCRoute"}:       {"grpcroutes", true},
+	{"gateway.networking.k8s.io", "v1", "GatewayClass"}:        {"gatewayclasses", false},
+	{"gateway.networking.k8s.io", "v1", "Gateway"}:             {"gateways", true},
+	{"gateway.networking.k8s.io", "v1", "HTTPRoute"}:           {"httproutes", true},
+	{"gateway.networking.k8s.io", "v1", "GRPCRoute"}:           {"grpcroutes", true},
 	{"gateway.networking.k8s.io", "v1beta1", "ReferenceGrant"}: {"referencegrants", true},
 
 	// cert-manager.io
-	{"cert-manager.io", "v1", "Certificate"}:         {"certificates", true},
-	{"cert-manager.io", "v1", "CertificateRequest"}:  {"certificaterequests", true},
-	{"cert-manager.io", "v1", "Challenge"}:            {"challenges", true},
-	{"cert-manager.io", "v1", "ClusterIssuer"}:        {"clusterissuers", false},
-	{"cert-manager.io", "v1", "Issuer"}:               {"issuers", true},
-	{"cert-manager.io", "v1", "Order"}:                {"orders", true},
+	{"cert-manager.io", "v1", "Certificate"}:        {"certificates", true},
+	{"cert-manager.io", "v1", "CertificateRequest"}: {"certificaterequests", true},
+	{"cert-manager.io", "v1", "Challenge"}:          {"challenges", true},
+	{"cert-manager.io", "v1", "ClusterIssuer"}:      {"clusterissuers", false},
+	{"cert-manager.io", "v1", "Issuer"}:             {"issuers", true},
+	{"cert-manager.io", "v1", "Order"}:              {"orders", true},
 
 	// argoproj.io
 	{"argoproj.io", "v1alpha1", "AnalysisRun"}:      {"analysisruns", true},
-	{"argoproj.io", "v1alpha1", "AnalysisTemplate"}:  {"analysistemplates", true},
-	{"argoproj.io", "v1alpha1", "Experiment"}:        {"experiments", true},
-	{"argoproj.io", "v1alpha1", "Rollout"}:           {"rollouts", true},
+	{"argoproj.io", "v1alpha1", "AnalysisTemplate"}: {"analysistemplates", true},
+	{"argoproj.io", "v1alpha1", "Experiment"}:       {"experiments", true},
+	{"argoproj.io", "v1alpha1", "Rollout"}:          {"rollouts", true},
 
 	// fluxcd
-	{"source.toolkit.fluxcd.io", "v1", "Bucket"}:        {"buckets", true},
-	{"source.toolkit.fluxcd.io", "v1", "GitRepository"}:   {"gitrepositories", true},
-	{"source.toolkit.fluxcd.io", "v1", "HelmChart"}:       {"helmcharts", true},
-	{"source.toolkit.fluxcd.io", "v1", "HelmRepository"}:  {"helmrepositories", true},
-	{"source.toolkit.fluxcd.io", "v1", "OCIRepository"}:   {"ocirepositories", true},
+	{"source.toolkit.fluxcd.io", "v1", "Bucket"}:           {"buckets", true},
+	{"source.toolkit.fluxcd.io", "v1", "GitRepository"}:    {"gitrepositories", true},
+	{"source.toolkit.fluxcd.io", "v1", "HelmChart"}:        {"helmcharts", true},
+	{"source.toolkit.fluxcd.io", "v1", "HelmRepository"}:   {"helmrepositories", true},
+	{"source.toolkit.fluxcd.io", "v1", "OCIRepository"}:    {"ocirepositories", true},
 	{"kustomize.toolkit.fluxcd.io", "v1", "Kustomization"}: {"kustomizations", true},
-	{"helm.toolkit.fluxcd.io", "v2beta1", "HelmRelease"}:  {"helmreleases", true},
+	{"helm.toolkit.fluxcd.io", "v2beta1", "HelmRelease"}:   {"helmreleases", true},
 }

@@ -52,7 +52,7 @@ func ParseManifests(in io.Reader) ([]*unstructured.Unstructured, error) {
 // NewStore creates a resource store from the given manifests.
 // It extracts GVRs, enriches metadata, synthesizes namespaces, and indexes everything.
 func NewStore(objects []*unstructured.Unstructured) *Store {
-s := &Store{
+	s := &Store{
 		byGVR:    make(map[GVR]map[string][]*unstructured.Unstructured),
 		typeInfo: make(map[GVR]TypeInfo),
 		gvrToGVK: make(map[GVR]GVK),

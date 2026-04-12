@@ -117,6 +117,7 @@ func TestBuildAPIGroupList_Sorted(t *testing.T) {
 	}
 }
 
+//nolint:gocyclo
 func TestBuildAPIV1Resources(t *testing.T) {
 	objects := []*unstructured.Unstructured{
 		makeUnstructured("v1", "Pod", "default", "pod1"),

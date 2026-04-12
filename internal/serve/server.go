@@ -59,10 +59,10 @@ func Run(in io.Reader, port int, command []string) error {
 	if err != nil {
 		return fmt.Errorf("starting server: %w", err)
 	}
-	defer srv.Shutdown(context.Background())
+	_ = srv.Shutdown(context.Background())
 	defer srv.Cleanup()
 
-	go srv.Serve()
+	go func() { _ = srv.Serve() }()
 
 	if len(command) > 0 {
 		return execChild(command, srv.KubeconfigPath())
@@ -124,11 +124,11 @@ func NewServer(store *Store, port int) (*Server, error) {
 	// Determine the actual port (in case port was 0).
 	_, portStr, _ := net.SplitHostPort(s.addr)
 	var portNum int
-	fmt.Sscanf(portStr, "%d", &portNum)
+	_, _ = fmt.Sscanf(portStr, "%d", &portNum)
 
 	cfg, err := WriteKubeconfig(portNum, caCertPEM)
 	if err != nil {
-		listener.Close()
+		_ = listener.Close()
 		return nil, fmt.Errorf("writing kubeconfig: %w", err)
 	}
 	s.cfg = cfg
@@ -350,13 +350,13 @@ func (s *Server) respondGet(w http.ResponseWriter, gvr GVR, ns, name string) {
 func writeJSON(w http.ResponseWriter, code int, v interface{}) {
 	w.Header().Set("Content-Type", "application/json")
 	w.WriteHeader(code)
-	json.NewEncoder(w).Encode(v)
+	_ = json.NewEncoder(w).Encode(v)
 }
 
 func writeError(w http.ResponseWriter, code int, message string) {
 	w.Header().Set("Content-Type", "application/json")
 	w.WriteHeader(code)
-	json.NewEncoder(w).Encode(map[string]interface{}{
+	_ = json.NewEncoder(w).Encode(map[string]interface{}{
 		"kind":       "Status",
 		"apiVersion": "v1",
 		"metadata":   map[string]interface{}{},
@@ -380,7 +380,7 @@ func parseSelector(s string) labels.Selector {
 // --- Child process execution ---
 
 func execChild(command []string, kubeconfigPath string) error {
-	cmd := exec.Command(command[0], command[1:]...)
+	cmd := exec.Command(command[0], command[1:]...) //nolint:gosec
 	cmd.Stdin = os.Stdin
 	cmd.Stdout = os.Stdout
 	cmd.Stderr = os.Stderr

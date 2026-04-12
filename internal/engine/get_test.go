@@ -22,33 +22,33 @@ func TestGetFilter(t *testing.T) {
 		wantErr   bool
 	}{
 		{
-			name: "filter by resource kind only",
-			opts: GetOptions{Resource: "ConfigMap"},
-			wantLen:  1,
+			name:      "filter by resource kind only",
+			opts:      GetOptions{Resource: "ConfigMap"},
+			wantLen:   1,
 			wantNames: []string{"first-cm"},
 		},
 		{
-			name: "filter by resource kind/name",
-			opts: GetOptions{Resource: "Deployment/my-app"},
-			wantLen:  1,
+			name:      "filter by resource kind/name",
+			opts:      GetOptions{Resource: "Deployment/my-app"},
+			wantLen:   1,
 			wantNames: []string{"my-app"},
 		},
 		{
-			name: "filter by resource group",
-			opts: GetOptions{Resource: "apps"},
-			wantLen:  1,
+			name:      "filter by resource group",
+			opts:      GetOptions{Resource: "apps"},
+			wantLen:   1,
 			wantNames: []string{"my-app"},
 		},
 		{
-			name: "filter by kind flag",
-			opts: GetOptions{Kind: "ConfigMap"},
-			wantLen:  1,
+			name:      "filter by kind flag",
+			opts:      GetOptions{Kind: "ConfigMap"},
+			wantLen:   1,
 			wantNames: []string{"first-cm"},
 		},
 		{
-			name: "filter by name flag",
-			opts: GetOptions{Name: "my-app"},
-			wantLen:  1,
+			name:      "filter by name flag",
+			opts:      GetOptions{Name: "my-app"},
+			wantLen:   1,
 			wantNames: []string{"my-app"},
 		},
 		{
@@ -58,14 +58,14 @@ func TestGetFilter(t *testing.T) {
 			wantLen: 0,
 		},
 		{
-			name: "no matches returns empty",
-			opts: GetOptions{Kind: "StatefulSet"},
-			wantLen:  0,
+			name:    "no matches returns empty",
+			opts:    GetOptions{Kind: "StatefulSet"},
+			wantLen: 0,
 		},
 		{
-			name: "empty options errors",
-			opts: GetOptions{},
-			wantErr:  true,
+			name:    "empty options errors",
+			opts:    GetOptions{},
+			wantErr: true,
 		},
 	}
 

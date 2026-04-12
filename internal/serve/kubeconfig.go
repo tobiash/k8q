@@ -45,7 +45,7 @@ users:
 
 	path := filepath.Join(dir, "kubeconfig")
 	if err := os.WriteFile(path, []byte(content), 0600); err != nil {
-		os.RemoveAll(dir)
+		_ = os.RemoveAll(dir)
 		return nil, fmt.Errorf("writing kubeconfig: %w", err)
 	}
 
@@ -55,6 +55,6 @@ users:
 // Cleanup removes the temp directory and kubeconfig file.
 func (k *Kubeconfig) Cleanup() {
 	if k.Dir != "" {
-		os.RemoveAll(k.Dir)
+		_ = os.RemoveAll(k.Dir)
 	}
 }

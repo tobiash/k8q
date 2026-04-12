@@ -122,8 +122,8 @@ func buildAPIResourceList(store *Store, group, version string) *metav1.APIResour
 			Kind:       "APIResourceList",
 			APIVersion: "v1",
 		},
-		GroupVersion:  gv,
-		APIResources:  resources,
+		GroupVersion: gv,
+		APIResources: resources,
 	}
 }
 
