@@ -193,6 +193,7 @@ func getReplicas(node *yaml.RNode) int {
 	return val
 }
 
+//nolint:gocyclo
 func getPodResources(node *yaml.RNode) (req, lim resourcePair) {
 	containerPaths := [][]string{
 		{"spec", "containers"},

@@ -130,6 +130,7 @@ func colorizeValue(val string) string {
 	return green + val + reset
 }
 
+//nolint:gocyclo
 func isNumeric(s string) bool {
 	if s == "" || s == "-" || s == "+" {
 		return false

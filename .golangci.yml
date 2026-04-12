@@ -1,10 +1,12 @@
+version: "2"
+
 run:
   timeout: 5m
 
 linters:
+  default: none
   enable:
     - errcheck
-    - goimports
     - revive
     - govet
     - staticcheck
@@ -13,16 +15,20 @@ linters:
     - misspell
     - gocyclo
 
-linters-settings:
-  goimports:
-    local-prefixes: github.com/tobiash/k8q
-  revive:
-    rules:
-      - name: exported
-  gocyclo:
-    min-complexity: 15
+  settings:
+    revive:
+      rules:
+        - name: exported
+    gocyclo:
+      min-complexity: 15
+
+formatters:
+  enable:
+    - goimports
+  settings:
+    goimports:
+      local-prefixes: [github.com/tobiash/k8q]
 
 issues:
-  exclude-use-default: false
   max-issues-per-linter: 0
   max-same-issues: 0

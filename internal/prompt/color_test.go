@@ -147,8 +147,8 @@ func TestColorWriterColorized(t *testing.T) {
 	cw := NewColorWriter(&buf, true)
 
 	input := "kind: ConfigMap\n"
-	cw.Write([]byte(input))
-	cw.Close()
+	_, _ = cw.Write([]byte(input))
+	_ = cw.Close()
 
 	// Should contain ANSI codes.
 	if !strings.Contains(buf.String(), "\033[") {

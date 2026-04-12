@@ -29,8 +29,8 @@ func SetImageFilter(opts SetImageOptions) (Filter, error) {
 	return ScopedMutator(opts.Match, func(node *yaml.RNode) error {
 		// List of paths where containers might live.
 		containerPaths := [][]string{
-			{"spec", "containers"},           // Pod
-			{"spec", "template", "spec", "containers"}, // Deployment, etc.
+			{"spec", "containers"},                                            // Pod
+			{"spec", "template", "spec", "containers"},                        // Deployment, etc.
 			{"spec", "jobTemplate", "spec", "template", "spec", "containers"}, // CronJob
 		}
 

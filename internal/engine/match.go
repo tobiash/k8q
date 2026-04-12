@@ -31,6 +31,8 @@ type MatchOptions struct {
 
 // Match returns true if the given resource metadata matches the criteria
 // according to the specified Mode.
+//
+//nolint:gocyclo
 func Match(meta yaml.ResourceMeta, opts MatchOptions) bool {
 	// If no criteria are provided, it's a match-all.
 	if opts.Resource == "" && opts.Kind == "" && opts.Name == "" && opts.Namespace == "" &&
