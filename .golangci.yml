@@ -27,9 +27,8 @@ formatters:
     - goimports
   settings:
     goimports:
-      local-prefixes: github.com/tobiash/k8q
+      local-prefixes: [github.com/tobiash/k8q]
 
 issues:
-  exclude-generated: lax
   max-issues-per-linter: 0
   max-same-issues: 0
