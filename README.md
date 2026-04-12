@@ -136,6 +136,40 @@ Modifies `metadata.name` by adding a prefix or suffix.
 k8q rename --suffix "-v2"
 ```
 
+## Analyzers
+
+Analyzers provide insights about the stream. They typically terminate the pipeline by printing a report instead of YAML.
+
+### `count` — Count manifests
+
+Counts matching manifests.
+
+```bash
+# Count everything
+k8q count
+
+# Count only Deployments
+k8q count --kind Deployment
+
+# Group counts by kind
+k8q count --group-by-kind
+```
+
+### `sum` — Sum resources
+
+Calculates total CPU and Memory requests for matching manifests (looking in Pod templates). Accounts for `spec.replicas`.
+
+```bash
+# Sum resources for all workloads
+k8q sum
+
+# Sum resources for a specific namespace
+k8q sum --namespace production
+
+# Fail if any container is missing requests or limits
+k8q sum --require-requests --require-limits
+```
+
 ## Match Criteria
 
 Both filtering (`get`, `drop`) and mutation commands support the same matching filters:
