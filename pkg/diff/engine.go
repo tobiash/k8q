@@ -1,4 +1,4 @@
-package engine
+package diff
 
 import (
 	"bytes"
@@ -7,66 +7,49 @@ import (
 	"sort"
 	"strings"
 
-	intdiff "github.com/tobiash/k8q/internal/diff"
 	"sigs.k8s.io/kustomize/kyaml/kio"
 	"sigs.k8s.io/kustomize/kyaml/yaml"
 )
 
-// DiffResultJSON is the JSON representation of a manifest diff.
-type DiffResultJSON struct {
-	Added    []map[string]any  `json:"added"`
-	Deleted  []ObjectRef       `json:"deleted"`
-	Modified []DiffChangeJSON  `json:"modified"`
+// ObjectRef mirrors the Kubernetes ObjectReference shape used in Events,
+// OwnerReferences, and other cross-resource references.
+type ObjectRef struct {
+	APIVersion string `json:"apiVersion"`
+	Kind       string `json:"kind"`
+	Name       string `json:"name"`
+	Namespace  string `json:"namespace,omitempty"`
 }
 
-// DiffChangeJSON represents a modified resource with before/after snapshots.
-type DiffChangeJSON struct {
-	ObjectRef   ObjectRef      `json:"objectRef"`
-	Old         map[string]any `json:"old"`
-	New         map[string]any `json:"new"`
-	UnifiedDiff string         `json:"unifiedDiff"`
-}
-
-type resourceKey struct {
-	apiVersion string
-	kind       string
-	namespace  string
-	name       string
-}
-
-func (k resourceKey) String() string {
-	if k.namespace != "" {
-		return fmt.Sprintf("%s/%s (%s)", k.kind, k.name, k.namespace)
+// String returns a human-readable identifier for the resource.
+func (o ObjectRef) String() string {
+	if o.Namespace != "" {
+		return fmt.Sprintf("%s/%s (%s)", o.Kind, o.Name, o.Namespace)
 	}
-	return fmt.Sprintf("%s/%s", k.kind, k.name)
+	return fmt.Sprintf("%s/%s", o.Kind, o.Name)
 }
 
-func resourceKeyFromMeta(meta yaml.ResourceMeta) resourceKey {
-	return resourceKey{
-		apiVersion: meta.APIVersion,
-		kind:       meta.Kind,
-		namespace:  meta.Namespace,
-		name:       meta.Name,
-	}
-}
-
+// ResourceChange describes a single modified resource.
 type ResourceChange struct {
-	Key    resourceKey
+	Key    ObjectRef
 	Before string
 	After  string
-	Diff   intdiff.Unified
+	Diff   Unified
 }
 
+// DiffResult holds the structured result of a diff between two manifest sets.
 type DiffResult struct {
-	Added    []resourceKey
-	Removed  []resourceKey
+	Added    []ObjectRef
+	Removed  []ObjectRef
 	Modified []ResourceChange
 }
 
+// HasChanges reports whether any resources were added, removed, or modified.
 func (r *DiffResult) HasChanges() bool {
 	return len(r.Added) > 0 || len(r.Removed) > 0 || len(r.Modified) > 0
 }
 
+// DiffNodes computes a semantic diff between two sets of Kubernetes manifests.
+// Resources are matched by identity (apiVersion + kind + namespace + name).
 func DiffNodes(before, after []*yaml.RNode) (*DiffResult, error) {
 	reorder := ReorderFilter()
 	if _, err := reorder(before); err != nil {
@@ -111,10 +94,7 @@ func DiffNodes(before, after []*yaml.RNode) (*DiffResult, error) {
 			continue
 		}
 
-		aLines := splitLines(beforeStr)
-		bLines := splitLines(afterStr)
-		ops := intdiff.ComputeOps(aLines, bLines)
-		u := intdiff.ToUnified(key.String(), key.String(), aLines, bLines, ops)
+		u := ComputeDiff(key.String(), beforeStr, afterStr)
 
 		result.Modified = append(result.Modified, ResourceChange{
 			Key:    key,
@@ -135,6 +115,57 @@ func DiffNodes(before, after []*yaml.RNode) (*DiffResult, error) {
 	})
 
 	return result, nil
+}
+
+func buildResourceMap(nodes []*yaml.RNode) (map[ObjectRef]*yaml.RNode, error) {
+	m := make(map[ObjectRef]*yaml.RNode, len(nodes))
+	for _, node := range nodes {
+		meta, err := node.GetMeta()
+		if err != nil {
+			continue
+		}
+		key := ObjectRefFromMeta(meta)
+		m[key] = node
+	}
+	return m, nil
+}
+
+// ObjectRefFromMeta builds an ObjectRef from kyaml ResourceMeta.
+func ObjectRefFromMeta(meta yaml.ResourceMeta) ObjectRef {
+	return ObjectRef{
+		APIVersion: meta.APIVersion,
+		Kind:       meta.Kind,
+		Namespace:  meta.Namespace,
+		Name:       meta.Name,
+	}
+}
+
+func renderNode(node *yaml.RNode) string {
+	var buf bytes.Buffer
+	writer := &kio.ByteWriter{Writer: &buf}
+	if err := writer.Write([]*yaml.RNode{node}); err != nil {
+		return ""
+	}
+	s := buf.String()
+	if s != "" && !strings.HasSuffix(s, "\n") {
+		s += "\n"
+	}
+	return s
+}
+
+// DiffResultJSON is the JSON representation of a manifest diff.
+type DiffResultJSON struct {
+	Added    []map[string]any `json:"added"`
+	Deleted  []ObjectRef      `json:"deleted"`
+	Modified []DiffChangeJSON `json:"modified"`
+}
+
+// DiffChangeJSON represents a modified resource with before/after snapshots.
+type DiffChangeJSON struct {
+	ObjectRef   ObjectRef      `json:"objectRef"`
+	Old         map[string]any `json:"old"`
+	New         map[string]any `json:"new"`
+	UnifiedDiff string         `json:"unifiedDiff"`
 }
 
 // DiffNodesJSON computes a diff and returns a JSON-serializable result.
@@ -162,10 +193,10 @@ func DiffNodesJSON(before, after []*yaml.RNode) (*DiffResultJSON, error) {
 
 	for _, key := range result.Removed {
 		out.Deleted = append(out.Deleted, ObjectRef{
-			APIVersion: key.apiVersion,
-			Kind:       key.kind,
-			Name:       key.name,
-			Namespace:  key.namespace,
+			APIVersion: key.APIVersion,
+			Kind:       key.Kind,
+			Name:       key.Name,
+			Namespace:  key.Namespace,
 		})
 	}
 
@@ -176,15 +207,10 @@ func DiffNodesJSON(before, after []*yaml.RNode) (*DiffResultJSON, error) {
 		newMap, _ := afterNode.Map()
 
 		var diffBuf bytes.Buffer
-		intdiff.Format(&diffBuf, change.Diff)
+		Format(&diffBuf, change.Diff)
 
 		out.Modified = append(out.Modified, DiffChangeJSON{
-			ObjectRef: ObjectRef{
-				APIVersion: change.Key.apiVersion,
-				Kind:       change.Key.kind,
-				Name:       change.Key.name,
-				Namespace:  change.Key.namespace,
-			},
+			ObjectRef:   change.Key,
 			Old:         oldMap,
 			New:         newMap,
 			UnifiedDiff: diffBuf.String(),
@@ -194,32 +220,7 @@ func DiffNodesJSON(before, after []*yaml.RNode) (*DiffResultJSON, error) {
 	return out, nil
 }
 
-func buildResourceMap(nodes []*yaml.RNode) (map[resourceKey]*yaml.RNode, error) {
-	m := make(map[resourceKey]*yaml.RNode, len(nodes))
-	for _, node := range nodes {
-		meta, err := node.GetMeta()
-		if err != nil {
-			continue
-		}
-		key := resourceKeyFromMeta(meta)
-		m[key] = node
-	}
-	return m, nil
-}
-
-func renderNode(node *yaml.RNode) string {
-	var buf bytes.Buffer
-	writer := &kio.ByteWriter{Writer: &buf}
-	if err := writer.Write([]*yaml.RNode{node}); err != nil {
-		return ""
-	}
-	s := buf.String()
-	if s != "" && !strings.HasSuffix(s, "\n") {
-		s += "\n"
-	}
-	return s
-}
-
+// FormatUnifiedDiff writes a plain-text summary of the diff.
 func FormatUnifiedDiff(w io.Writer, result *DiffResult) {
 	for _, key := range result.Removed {
 		fmt.Fprintf(w, "REMOVED %s\n\n", key)
@@ -230,16 +231,17 @@ func FormatUnifiedDiff(w io.Writer, result *DiffResult) {
 	}
 
 	for _, change := range result.Modified {
-		intdiff.Format(w, change.Diff)
+		Format(w, change.Diff)
 		fmt.Fprintln(w)
 	}
 }
 
+// FormatSummary writes a compact list of changed resources.
 func FormatSummary(w io.Writer, result *DiffResult) {
-	for _, key := range sortKeys(result.Removed) {
+	for _, key := range sortObjectRefs(result.Removed) {
 		fmt.Fprintf(w, "REMOVED  %s\n", key)
 	}
-	for _, key := range sortKeys(result.Added) {
+	for _, key := range sortObjectRefs(result.Added) {
 		fmt.Fprintf(w, "ADDED    %s\n", key)
 	}
 	for _, change := range result.Modified {
@@ -247,22 +249,11 @@ func FormatSummary(w io.Writer, result *DiffResult) {
 	}
 }
 
-func sortKeys(keys []resourceKey) []resourceKey {
-	sorted := make([]resourceKey, len(keys))
-	copy(sorted, keys)
+func sortObjectRefs(refs []ObjectRef) []ObjectRef {
+	sorted := make([]ObjectRef, len(refs))
+	copy(sorted, refs)
 	sort.Slice(sorted, func(i, j int) bool {
 		return sorted[i].String() < sorted[j].String()
 	})
 	return sorted
-}
-
-func splitLines(s string) []string {
-	if s == "" {
-		return nil
-	}
-	lines := strings.SplitAfter(s, "\n")
-	if len(lines) > 0 && lines[len(lines)-1] == "" {
-		lines = lines[:len(lines)-1]
-	}
-	return lines
 }

@@ -1,4 +1,4 @@
-package engine
+package diff
 
 import (
 	"sort"
@@ -37,10 +37,10 @@ var metadataFieldOrder = map[string]int{
 	"selfLink":          12,
 }
 
-// ReorderFilter returns a Filter that reorders fields in each manifest to
+// ReorderFilter returns a kio.Filter that reorders fields in each manifest to
 // follow Kubernetes conventions: apiVersion, kind, metadata, spec, status, ...
 // Unknown fields are preserved at the end in their original order.
-func ReorderFilter() Filter {
+func ReorderFilter() func([]*yaml.RNode) ([]*yaml.RNode, error) {
 	return func(nodes []*yaml.RNode) ([]*yaml.RNode, error) {
 		for _, node := range nodes {
 			reorderMapping(node.YNode(), topFieldOrder)

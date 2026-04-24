@@ -14,7 +14,8 @@ import (
 	"github.com/posener/complete"
 	"sigs.k8s.io/kustomize/kyaml/kio"
 
-	"github.com/tobiash/k8q/internal/engine"
+	k8qdiff "github.com/tobiash/k8q/pkg/diff"
+	"github.com/tobiash/k8q/pkg/engine"
 	"github.com/tobiash/k8q/internal/serve"
 )
 
@@ -559,13 +560,13 @@ func (cmd *DiffCmd) Run(g *Globals) error {
 		return fmt.Errorf("reading after: %w", err)
 	}
 
-	result, err := engine.DiffNodes(beforeNodes, afterNodes)
+	result, err := k8qdiff.DiffNodes(beforeNodes, afterNodes)
 	if err != nil {
 		return err
 	}
 
 	if g.Output == "json" {
-		jsonResult, err := engine.DiffNodesJSON(beforeNodes, afterNodes)
+		jsonResult, err := k8qdiff.DiffNodesJSON(beforeNodes, afterNodes)
 		if err != nil {
 			return err
 		}
@@ -576,9 +577,9 @@ func (cmd *DiffCmd) Run(g *Globals) error {
 		}
 	} else {
 		if cmd.Summary {
-			engine.FormatSummary(g.Out, result)
+			k8qdiff.FormatSummary(g.Out, result)
 		} else {
-			engine.FormatUnifiedDiff(g.Out, result)
+			k8qdiff.FormatUnifiedDiff(g.Out, result)
 		}
 	}
 

@@ -3,7 +3,8 @@ package main
 import (
 	"sigs.k8s.io/kustomize/kyaml/kio"
 
-	"github.com/tobiash/k8q/internal/engine"
+	k8qdiff "github.com/tobiash/k8q/pkg/diff"
+	"github.com/tobiash/k8q/pkg/engine"
 	"github.com/tobiash/k8q/internal/prompt"
 )
 
@@ -12,7 +13,7 @@ import (
 // and wraps the output writer for ANSI colors when writing to a terminal.
 func runPipeline(g *Globals, filters ...kio.Filter) error {
 	// Always reorder fields for consistent output.
-	allFilters := append(filters, engine.ReorderFilter())
+	allFilters := append(filters, kio.FilterFunc(k8qdiff.ReorderFilter()))
 
 	// Wrap output for colorization when appropriate.
 	out := g.Out

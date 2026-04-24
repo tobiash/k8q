@@ -5,6 +5,8 @@ import (
 	"testing"
 
 	"github.com/google/go-cmp/cmp"
+	k8qdiff "github.com/tobiash/k8q/pkg/diff"
+	"sigs.k8s.io/kustomize/kyaml/kio"
 )
 
 func TestReorderFilter(t *testing.T) {
@@ -108,7 +110,7 @@ data:
 			in := bytes.NewReader([]byte(tt.input))
 			var out bytes.Buffer
 
-			err := Pipeline(in, &out, ReorderFilter())
+			err := Pipeline(in, &out, kio.FilterFunc(k8qdiff.ReorderFilter()))
 			if err != nil {
 				t.Fatalf("Pipeline() error: %v", err)
 			}
