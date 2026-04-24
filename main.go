@@ -40,7 +40,7 @@ func (g *Globals) resolveInput() (io.Reader, error) {
 	for i, path := range g.Files {
 		data, err := os.ReadFile(path)
 		if err != nil {
-			return nil, fmt.Errorf("reading %s: %w", path, err)
+			return nil, userError("reading %s: %v", path, err)
 		}
 		if i > 0 {
 			buf.WriteString("\n---\n")
@@ -645,7 +645,7 @@ func (cmd *DiffCmd) resolveInputs(g *Globals) (before, after io.Reader, cleanup 
 	if cmd.Base != "" {
 		f, err := os.Open(cmd.Base)
 		if err != nil {
-			return nil, nil, cleanup, fmt.Errorf("opening base file: %w", err)
+			return nil, nil, cleanup, userError("opening base file: %v", err)
 		}
 		cleanup = func() { f.Close() }
 		return f, after, cleanup, nil
@@ -656,23 +656,23 @@ func (cmd *DiffCmd) resolveInputs(g *Globals) (before, after io.Reader, cleanup 
 		b, e1 := openFileOrStdin(cmd.Files[0], os.Stdin)
 		a, e2 := openFileOrStdin(cmd.Files[1], os.Stdin)
 		if e1 != nil {
-			return nil, nil, cleanup, e1
+			return nil, nil, cleanup, userError("opening %s: %v", cmd.Files[0], e1)
 		}
 		if e2 != nil {
 			b.Close()
-			return nil, nil, cleanup, e2
+			return nil, nil, cleanup, userError("opening %s: %v", cmd.Files[1], e2)
 		}
 		cleanup = func() { b.Close(); a.Close() }
 		return b, a, cleanup, nil
 	case 1:
 		f, err := os.Open(cmd.Files[0])
 		if err != nil {
-			return nil, nil, cleanup, fmt.Errorf("opening file: %w", err)
+			return nil, nil, cleanup, userError("opening file %s: %v", cmd.Files[0], err)
 		}
 		cleanup = func() { f.Close() }
 		return f, after, cleanup, nil
 	default:
-		return nil, nil, cleanup, fmt.Errorf("provide two files, or use --base with stdin")
+		return nil, nil, cleanup, userError("provide two files, or use --base with stdin")
 	}
 }
 
@@ -687,6 +687,15 @@ func openFileOrStdin(path string, stdin *os.File) (*os.File, error) {
 type DiffExitError int
 
 func (e DiffExitError) Error() string { return "differences found" }
+
+// ErrUserInput marks errors caused by invalid CLI arguments, missing files,
+// or other user-correctable mistakes. These exit with code 2.
+var ErrUserInput = errors.New("user input error")
+
+// userError wraps an error as a user input error.
+func userError(format string, args ...any) error {
+	return fmt.Errorf("%w: %s", ErrUserInput, fmt.Sprintf(format, args...))
+}
 
 // CLI is the top-level Kong CLI struct.
 type CLI struct {
@@ -738,7 +747,15 @@ func main() {
 	kongcompletion.Register(parser, kongcompletion.WithPredictor("kind", complete.PredictSet(engine.CommonKinds...)))
 
 	ctx, err := parser.Parse(os.Args[1:])
-	parser.FatalIfErrorf(err)
+	if err != nil {
+		// Parse errors are always user input errors → exit 2.
+		if cli.Output == "json" {
+			writeJSONError(cli.Out, err)
+		} else {
+			fmt.Fprintln(os.Stderr, err)
+		}
+		os.Exit(2)
+	}
 
 	err = ctx.Run()
 	if err != nil {
@@ -748,11 +765,19 @@ func main() {
 		if code, ok := diffExitCode(err); ok {
 			os.Exit(code)
 		}
+
+		// User-correctable errors → exit 2.
+		exitCode := 1
+		if errors.Is(err, ErrUserInput) {
+			exitCode = 2
+		}
+
 		if cli.Output == "json" {
 			writeJSONError(cli.Out, err)
-			os.Exit(1)
+			os.Exit(exitCode)
 		}
-		ctx.FatalIfErrorf(err)
+		fmt.Fprintln(os.Stderr, err)
+		os.Exit(exitCode)
 	}
 }
 
