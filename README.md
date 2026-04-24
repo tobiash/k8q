@@ -136,6 +136,23 @@ Modifies `metadata.name` by adding a prefix or suffix.
 k8q rename --suffix "-v2"
 ```
 
+### `diff` — Compare manifests
+
+Compares two sets of Kubernetes manifests semantically. Resources are matched by identity (`apiVersion + kind + namespace + name`), so differences in document order or field ordering are ignored.
+
+```bash
+# Compare two files
+k8q diff before.yaml after.yaml
+
+# Pipe as "after", file as "before"
+helm template my-chart | k8q diff --base before.yaml
+
+# Summary mode
+k8q diff before.yaml after.yaml --summary
+```
+
+Exit codes: 0 = identical, 1 = differences found, 2+ = error.
+
 ### `serve` — Mock API server
 
 Starts an in-process mock Kubernetes API server that serves piped-in manifests over HTTPS. Writes a kubeconfig pointing to the server, then optionally executes a command with `KUBECONFIG` set. This lets cluster scanning tools connect to k8q as if it were a real cluster.

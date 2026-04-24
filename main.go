@@ -1,6 +1,9 @@
 package main
 
 import (
+	"encoding/json"
+	"errors"
+	"fmt"
 	"io"
 	"os"
 	"strings"
@@ -9,6 +12,7 @@ import (
 	"github.com/drone/envsubst/v2"
 	kongcompletion "github.com/jotaen/kong-completion"
 	"github.com/posener/complete"
+	"sigs.k8s.io/kustomize/kyaml/kio"
 
 	"github.com/tobiash/k8q/internal/engine"
 	"github.com/tobiash/k8q/internal/serve"
@@ -19,6 +23,24 @@ type Globals struct {
 	In      io.Reader `kong:"-"`
 	Out     io.Writer `kong:"-"`
 	NoColor bool      `name:"no-color" help:"Disable colored output."`
+	Output  string    `short:"o" name:"output" enum:"yaml,json" default:"yaml" help:"Output format (yaml or json)."`
+}
+
+// runOrJSON executes a filter and writes output as either YAML or JSON depending
+// on the global --output flag.
+func runOrJSON(g *Globals, f kio.Filter) error {
+	if g.Output == "json" {
+		nodes, err := engine.ReadNodes(g.In)
+		if err != nil {
+			return err
+		}
+		nodes, err = f.Filter(nodes)
+		if err != nil {
+			return err
+		}
+		return engine.WriteJSONList(g.Out, nodes)
+	}
+	return runOrJSON(g, f)
 }
 
 // GetCmd filters manifests by kind, name, namespace, api group and/or label selector.
@@ -49,7 +71,7 @@ func (cmd *GetCmd) Run(g *Globals) error {
 	if err != nil {
 		return err
 	}
-	return runPipeline(g, f)
+	return runOrJSON(g, f)
 }
 
 // SubstCmd substitutes environment variables in the raw input stream.
@@ -117,7 +139,7 @@ func (cmd *LabelCmd) Run(g *Globals) error {
 	if err != nil {
 		return err
 	}
-	return runPipeline(g, f)
+	return runOrJSON(g, f)
 }
 
 // AnnotateCmd injects an annotation into matching manifests.
@@ -153,7 +175,7 @@ func (cmd *AnnotateCmd) Run(g *Globals) error {
 	if err != nil {
 		return err
 	}
-	return runPipeline(g, f)
+	return runOrJSON(g, f)
 }
 
 // SetImageCmd updates container images in matching manifests.
@@ -189,7 +211,7 @@ func (cmd *SetImageCmd) Run(g *Globals) error {
 	if err != nil {
 		return err
 	}
-	return runPipeline(g, f)
+	return runOrJSON(g, f)
 }
 
 // PatchCmd merges a YAML patch into matching manifests.
@@ -225,7 +247,7 @@ func (cmd *PatchCmd) Run(g *Globals) error {
 	if err != nil {
 		return err
 	}
-	return runPipeline(g, f)
+	return runOrJSON(g, f)
 }
 
 // RemoveCmd deletes a field from matching manifests.
@@ -258,7 +280,7 @@ func (cmd *RemoveCmd) Run(g *Globals) error {
 			Mode:      engine.AndMode,
 		},
 	})
-	return runPipeline(g, f)
+	return runOrJSON(g, f)
 }
 
 // ScaleCmd updates spec.replicas for matching manifests.
@@ -291,7 +313,7 @@ func (cmd *ScaleCmd) Run(g *Globals) error {
 			Mode:      engine.AndMode,
 		},
 	})
-	return runPipeline(g, f)
+	return runOrJSON(g, f)
 }
 
 // RenameCmd prefixes or suffixes metadata.name.
@@ -326,7 +348,7 @@ func (cmd *RenameCmd) Run(g *Globals) error {
 			Mode:      engine.AndMode,
 		},
 	})
-	return runPipeline(g, f)
+	return runOrJSON(g, f)
 }
 
 // CountCmd counts matching manifests.
@@ -347,7 +369,7 @@ func (cmd *CountCmd) Run(g *Globals) error {
 		return err
 	}
 
-	f := engine.CountFilter(engine.CountOptions{
+	opts := engine.CountOptions{
 		GroupByKind: cmd.GroupByKind,
 		Match: engine.MatchOptions{
 			Resource:  cmd.Resource,
@@ -358,8 +380,23 @@ func (cmd *CountCmd) Run(g *Globals) error {
 			Selector:  sel,
 			Mode:      engine.AndMode,
 		},
-	})
-	return runPipeline(g, f)
+	}
+
+	if g.Output == "json" {
+		nodes, err := engine.ReadNodes(g.In)
+		if err != nil {
+			return err
+		}
+		result, err := engine.CountJSON(nodes, opts)
+		if err != nil {
+			return err
+		}
+		enc := json.NewEncoder(g.Out)
+		enc.SetIndent("", "  ")
+		return enc.Encode(result)
+	}
+
+	return runPipeline(g, engine.CountFilter(opts))
 }
 
 // SumCmd sums CPU and Memory requests for matching manifests.
@@ -385,7 +422,7 @@ func (cmd *SumCmd) Run(g *Globals) error {
 		return err
 	}
 
-	f := engine.SumFilter(engine.SumOptions{
+	opts := engine.SumOptions{
 		RequireRequests: cmd.RequireRequests,
 		RequireLimits:   cmd.RequireLimits,
 		MaxCPURequests:  cmd.MaxCPURequests,
@@ -401,8 +438,23 @@ func (cmd *SumCmd) Run(g *Globals) error {
 			Selector:  sel,
 			Mode:      engine.AndMode,
 		},
-	})
-	return runPipeline(g, f)
+	}
+
+	if g.Output == "json" {
+		nodes, err := engine.ReadNodes(g.In)
+		if err != nil {
+			return err
+		}
+		result, err := engine.SumJSON(nodes, opts)
+		if err != nil {
+			return err
+		}
+		enc := json.NewEncoder(g.Out)
+		enc.SetIndent("", "  ")
+		return enc.Encode(result)
+	}
+
+	return runPipeline(g, engine.SumFilter(opts))
 }
 
 // DropCmd removes manifests matching kind, name, namespace, api group and/or label selector.
@@ -467,7 +519,7 @@ func (cmd *SetNamespaceCmd) Run(g *Globals) error {
 			Mode:      engine.AndMode,
 		},
 	})
-	return runPipeline(g, f)
+	return runOrJSON(g, f)
 }
 
 // ServeCmd starts a mock Kubernetes API server serving piped-in manifests.
@@ -481,8 +533,114 @@ func (cmd *ServeCmd) Run(g *Globals) error {
 	return serve.Run(g.In, cmd.Port, cmd.Command)
 }
 
+// DiffExitCode is returned when differences are found.
+const DiffExitCode = 1
+
+// DiffCmd compares two sets of Kubernetes manifests.
+type DiffCmd struct {
+	Files   []string `arg:"" optional:"" help:"Files to compare (0-2 args). Use - for stdin."`
+	Base    string   `help:"Base (before) file. Stdin is used as after."`
+	Summary bool     `help:"Print a summary instead of a unified diff."`
+}
+
+func (cmd *DiffCmd) Run(g *Globals) error {
+	beforeReader, afterReader, cleanup, err := cmd.resolveInputs(g)
+	if err != nil {
+		return err
+	}
+	defer cleanup()
+
+	beforeNodes, err := engine.ReadNodes(beforeReader)
+	if err != nil {
+		return fmt.Errorf("reading before: %w", err)
+	}
+	afterNodes, err := engine.ReadNodes(afterReader)
+	if err != nil {
+		return fmt.Errorf("reading after: %w", err)
+	}
+
+	result, err := engine.DiffNodes(beforeNodes, afterNodes)
+	if err != nil {
+		return err
+	}
+
+	if g.Output == "json" {
+		jsonResult, err := engine.DiffNodesJSON(beforeNodes, afterNodes)
+		if err != nil {
+			return err
+		}
+		enc := json.NewEncoder(g.Out)
+		enc.SetIndent("", "  ")
+		if err := enc.Encode(jsonResult); err != nil {
+			return err
+		}
+	} else {
+		if cmd.Summary {
+			engine.FormatSummary(g.Out, result)
+		} else {
+			engine.FormatUnifiedDiff(g.Out, result)
+		}
+	}
+
+	if result.HasChanges() {
+		return DiffExitError(DiffExitCode)
+	}
+	return nil
+}
+
+func (cmd *DiffCmd) resolveInputs(g *Globals) (before, after io.Reader, cleanup func(), err error) {
+	cleanup = func() {}
+
+	if cmd.Base != "" {
+		f, err := os.Open(cmd.Base)
+		if err != nil {
+			return nil, nil, cleanup, fmt.Errorf("opening base file: %w", err)
+		}
+		cleanup = func() { f.Close() }
+		return f, g.In, cleanup, nil
+	}
+
+	switch len(cmd.Files) {
+	case 2:
+		b, e1 := openFileOrStdin(cmd.Files[0], os.Stdin)
+		a, e2 := openFileOrStdin(cmd.Files[1], os.Stdin)
+		if e1 != nil {
+			return nil, nil, cleanup, e1
+		}
+		if e2 != nil {
+			b.Close()
+			return nil, nil, cleanup, e2
+		}
+		cleanup = func() { b.Close(); a.Close() }
+		return b, a, cleanup, nil
+	case 1:
+		f, err := os.Open(cmd.Files[0])
+		if err != nil {
+			return nil, nil, cleanup, fmt.Errorf("opening file: %w", err)
+		}
+		cleanup = func() { f.Close() }
+		return f, g.In, cleanup, nil
+	default:
+		return nil, nil, cleanup, fmt.Errorf("provide two files, or use --base with stdin")
+	}
+}
+
+func openFileOrStdin(path string, stdin *os.File) (*os.File, error) {
+	if path == "-" {
+		return stdin, nil
+	}
+	return os.Open(path)
+}
+
+// DiffExitError wraps an exit code for the diff command.
+type DiffExitError int
+
+func (e DiffExitError) Error() string { return "differences found" }
+
 // CLI is the top-level Kong CLI struct.
 type CLI struct {
+	Globals
+
 	Get          GetCmd                    `cmd:"" help:"Filter the stream to keep only matching manifests."`
 	Drop         DropCmd                   `cmd:"" help:"Filter the stream to remove matching manifests."`
 	Subst        SubstCmd                  `cmd:"" help:"Substitute environment variables from an .env file."`
@@ -496,12 +654,23 @@ type CLI struct {
 	SetNamespace SetNamespaceCmd           `cmd:"" help:"Overwrite metadata.namespace for matching manifests."`
 	Count        CountCmd                  `cmd:"" help:"Count matching manifests."`
 	Sum          SumCmd                    `cmd:"" help:"Sum CPU and Memory requests for matching manifests."`
+	Diff         DiffCmd                   `cmd:"" help:"Compare two sets of Kubernetes manifests."`
 	Serve        ServeCmd                  `cmd:"" help:"Start a mock Kubernetes API server for piped-in manifests."`
 	Completion   kongcompletion.Completion `cmd:"" help:"Print shell completion script."`
 }
 
+func diffExitCode(err error) (int, bool) {
+	var e DiffExitError
+	if errors.As(err, &e) {
+		return int(e), true
+	}
+	return 0, false
+}
+
 func main() {
 	cli := &CLI{}
+	cli.In = os.Stdin
+	cli.Out = os.Stdout
 	parser := kong.Must(cli,
 		kong.Name("k8q"),
 		kong.Description("A Unix-style pipe for filtering, mutating, and exploring Kubernetes YAML manifests."),
@@ -511,10 +680,7 @@ func main() {
 			Summary: true,
 		}),
 		kong.DefaultEnvars(""),
-		kong.Bind(&Globals{
-			In:  os.Stdin,
-			Out: os.Stdout,
-		}),
+		kong.Bind(&cli.Globals),
 	)
 
 	// Register completion support.
@@ -528,6 +694,40 @@ func main() {
 		if code, ok := serve.ExitCode(err); ok {
 			os.Exit(code)
 		}
+		if code, ok := diffExitCode(err); ok {
+			os.Exit(code)
+		}
+		if cli.Output == "json" {
+			writeJSONError(cli.Out, err)
+			os.Exit(1)
+		}
 		ctx.FatalIfErrorf(err)
 	}
+}
+
+// jsonErrorEnvelope is the structured error output used when --output json is set.
+type jsonErrorEnvelope struct {
+	Status string      `json:"status"`
+	Data   interface{} `json:"data"`
+	Error  jsonError   `json:"error"`
+}
+
+type jsonError struct {
+	Reason  string                 `json:"reason"`
+	Message string                 `json:"message"`
+	Details map[string]interface{} `json:"details,omitempty"`
+}
+
+func writeJSONError(out io.Writer, err error) {
+	env := jsonErrorEnvelope{
+		Status: "failure",
+		Data:   nil,
+		Error: jsonError{
+			Reason:  "CommandFailed",
+			Message: err.Error(),
+		},
+	}
+	enc := json.NewEncoder(out)
+	enc.SetIndent("", "  ")
+	_ = enc.Encode(env)
 }

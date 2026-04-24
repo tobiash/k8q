@@ -7,6 +7,12 @@ import (
 	"sigs.k8s.io/kustomize/kyaml/yaml"
 )
 
+// CountResult is the JSON representation of a count analysis.
+type CountResult struct {
+	Count       int            `json:"count"`
+	CountByKind map[string]int `json:"countByKind,omitempty"`
+}
+
 // CountOptions configures the count analyzer.
 type CountOptions struct {
 	GroupByKind bool
@@ -50,4 +56,24 @@ func CountFilter(opts CountOptions) Filter {
 
 		return nil, nil // Terminate pipeline
 	}
+}
+
+// CountJSON counts matching manifests and returns a JSON-serializable result.
+func CountJSON(nodes []*yaml.RNode, opts CountOptions) (*CountResult, error) {
+	count := 0
+	kindCounts := make(map[string]int)
+
+	for _, node := range nodes {
+		meta, err := node.GetMeta()
+		if err != nil {
+			continue
+		}
+		if Match(meta, opts.Match) {
+			count++
+			if opts.GroupByKind {
+				kindCounts[meta.Kind]++
+			}
+		}
+	}
+	return &CountResult{Count: count, CountByKind: kindCounts}, nil
 }
