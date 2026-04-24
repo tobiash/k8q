@@ -1,6 +1,8 @@
 package main
 
 import (
+	"io"
+
 	"sigs.k8s.io/kustomize/kyaml/kio"
 
 	k8qdiff "github.com/tobiash/k8q/pkg/diff"
@@ -11,7 +13,7 @@ import (
 // runPipeline executes the YAML pipeline with automatic field reordering
 // and optional colorization. It appends ReorderFilter to the filter chain
 // and wraps the output writer for ANSI colors when writing to a terminal.
-func runPipeline(g *Globals, filters ...kio.Filter) error {
+func runPipeline(g *Globals, in io.Reader, filters ...kio.Filter) error {
 	// Always reorder fields for consistent output.
 	allFilters := append(filters, kio.FilterFunc(k8qdiff.ReorderFilter()))
 
@@ -22,7 +24,7 @@ func runPipeline(g *Globals, filters ...kio.Filter) error {
 		defer func() { _ = cw.Close() }()
 	}
 
-	return engine.Pipeline(g.In, out, allFilters...)
+	return engine.Pipeline(in, out, allFilters...)
 }
 
 // maybeColorWriter returns a ColorWriter if colorization should be active,

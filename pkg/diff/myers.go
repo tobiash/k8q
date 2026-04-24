@@ -31,9 +31,10 @@ func ComputeDiff(name, before, after string) Unified {
 	return gotextdiff.ToUnified(name, name, before, edits)
 }
 
-// Format writes a unified diff to w.
+// Format writes a unified diff to w by delegating to gotextdiff's
+// fmt.Formatter implementation on Unified.
 func Format(w io.Writer, u Unified) {
-	fmt.Fprint(w, u)
+	fmt.Fprintf(w, "%v", u)
 }
 
 // FormatString renders a unified diff as a string.

@@ -1,6 +1,7 @@
 package main
 
 import (
+	"bytes"
 	"encoding/json"
 	"errors"
 	"fmt"
@@ -25,13 +26,39 @@ type Globals struct {
 	Out     io.Writer `kong:"-"`
 	NoColor bool      `name:"no-color" help:"Disable colored output."`
 	Output  string    `short:"o" name:"output" enum:"yaml,json" default:"yaml" help:"Output format (yaml or json)."`
+	Files   []string  `short:"f" name:"file" type:"path" help:"Read from file(s) instead of stdin."`
+}
+
+// resolveInput returns the effective input reader. If --file flags are set,
+// it reads and concatenates the files with YAML document separators.
+// Otherwise it returns g.In (stdin by default).
+func (g *Globals) resolveInput() (io.Reader, error) {
+	if len(g.Files) == 0 {
+		return g.In, nil
+	}
+	var buf bytes.Buffer
+	for i, path := range g.Files {
+		data, err := os.ReadFile(path)
+		if err != nil {
+			return nil, fmt.Errorf("reading %s: %w", path, err)
+		}
+		if i > 0 {
+			buf.WriteString("\n---\n")
+		}
+		buf.Write(data)
+	}
+	return &buf, nil
 }
 
 // runOrJSON executes a filter and writes output as either YAML or JSON depending
 // on the global --output flag.
 func runOrJSON(g *Globals, f kio.Filter) error {
+	in, err := g.resolveInput()
+	if err != nil {
+		return err
+	}
 	if g.Output == "json" {
-		nodes, err := engine.ReadNodes(g.In)
+		nodes, err := engine.ReadNodes(in)
 		if err != nil {
 			return err
 		}
@@ -41,7 +68,7 @@ func runOrJSON(g *Globals, f kio.Filter) error {
 		}
 		return engine.WriteJSONList(g.Out, nodes)
 	}
-	return runOrJSON(g, f)
+	return runPipeline(g, in, f)
 }
 
 // GetCmd filters manifests by kind, name, namespace, api group and/or label selector.
@@ -82,7 +109,11 @@ type SubstCmd struct {
 
 // Run executes the subst command.
 func (cmd *SubstCmd) Run(g *Globals) error {
-	raw, err := io.ReadAll(g.In)
+	in, err := g.resolveInput()
+	if err != nil {
+		return err
+	}
+	raw, err := io.ReadAll(in)
 	if err != nil {
 		return err
 	}
@@ -99,12 +130,7 @@ func (cmd *SubstCmd) Run(g *Globals) error {
 		return err
 	}
 
-	// Use the substituted string as pipeline input.
-	origIn := g.In
-	g.In = strings.NewReader(substituted)
-	defer func() { g.In = origIn }()
-
-	return runPipeline(g)
+	return runPipeline(g, strings.NewReader(substituted))
 }
 
 // LabelCmd injects a label into manifests matching certain criteria.
@@ -365,6 +391,11 @@ type CountCmd struct {
 
 // Run executes the count command.
 func (cmd *CountCmd) Run(g *Globals) error {
+	in, err := g.resolveInput()
+	if err != nil {
+		return err
+	}
+
 	sel, err := engine.ParseSelectorFlag(cmd.Selector)
 	if err != nil {
 		return err
@@ -384,7 +415,7 @@ func (cmd *CountCmd) Run(g *Globals) error {
 	}
 
 	if g.Output == "json" {
-		nodes, err := engine.ReadNodes(g.In)
+		nodes, err := engine.ReadNodes(in)
 		if err != nil {
 			return err
 		}
@@ -397,7 +428,7 @@ func (cmd *CountCmd) Run(g *Globals) error {
 		return enc.Encode(result)
 	}
 
-	return runPipeline(g, engine.CountFilter(opts))
+	return runPipeline(g, in, engine.CountFilter(opts))
 }
 
 // SumCmd sums CPU and Memory requests for matching manifests.
@@ -418,6 +449,11 @@ type SumCmd struct {
 
 // Run executes the sum command.
 func (cmd *SumCmd) Run(g *Globals) error {
+	in, err := g.resolveInput()
+	if err != nil {
+		return err
+	}
+
 	sel, err := engine.ParseSelectorFlag(cmd.Selector)
 	if err != nil {
 		return err
@@ -442,7 +478,7 @@ func (cmd *SumCmd) Run(g *Globals) error {
 	}
 
 	if g.Output == "json" {
-		nodes, err := engine.ReadNodes(g.In)
+		nodes, err := engine.ReadNodes(in)
 		if err != nil {
 			return err
 		}
@@ -455,7 +491,7 @@ func (cmd *SumCmd) Run(g *Globals) error {
 		return enc.Encode(result)
 	}
 
-	return runPipeline(g, engine.SumFilter(opts))
+	return runPipeline(g, in, engine.SumFilter(opts))
 }
 
 // DropCmd removes manifests matching kind, name, namespace, api group and/or label selector.
@@ -470,6 +506,11 @@ type DropCmd struct {
 
 // Run executes the drop command.
 func (cmd *DropCmd) Run(g *Globals) error {
+	in, err := g.resolveInput()
+	if err != nil {
+		return err
+	}
+
 	sel, err := engine.ParseSelectorFlag(cmd.Selector)
 	if err != nil {
 		return err
@@ -487,7 +528,7 @@ func (cmd *DropCmd) Run(g *Globals) error {
 		return err
 	}
 
-	return runPipeline(g, engine.DropFilter(opts))
+	return runPipeline(g, in, engine.DropFilter(opts))
 }
 
 // SetNamespaceCmd overwrites metadata.namespace on matching manifests.
@@ -531,7 +572,11 @@ type ServeCmd struct {
 
 // Run starts the mock API server.
 func (cmd *ServeCmd) Run(g *Globals) error {
-	return serve.Run(g.In, cmd.Port, cmd.Command)
+	in, err := g.resolveInput()
+	if err != nil {
+		return err
+	}
+	return serve.Run(in, cmd.Port, cmd.Command)
 }
 
 // DiffExitCode is returned when differences are found.
@@ -592,13 +637,18 @@ func (cmd *DiffCmd) Run(g *Globals) error {
 func (cmd *DiffCmd) resolveInputs(g *Globals) (before, after io.Reader, cleanup func(), err error) {
 	cleanup = func() {}
 
+	after, err = g.resolveInput()
+	if err != nil {
+		return nil, nil, cleanup, err
+	}
+
 	if cmd.Base != "" {
 		f, err := os.Open(cmd.Base)
 		if err != nil {
 			return nil, nil, cleanup, fmt.Errorf("opening base file: %w", err)
 		}
 		cleanup = func() { f.Close() }
-		return f, g.In, cleanup, nil
+		return f, after, cleanup, nil
 	}
 
 	switch len(cmd.Files) {
@@ -620,7 +670,7 @@ func (cmd *DiffCmd) resolveInputs(g *Globals) (before, after io.Reader, cleanup 
 			return nil, nil, cleanup, fmt.Errorf("opening file: %w", err)
 		}
 		cleanup = func() { f.Close() }
-		return f, g.In, cleanup, nil
+		return f, after, cleanup, nil
 	default:
 		return nil, nil, cleanup, fmt.Errorf("provide two files, or use --base with stdin")
 	}
