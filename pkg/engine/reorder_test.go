@@ -5,8 +5,9 @@ import (
 	"testing"
 
 	"github.com/google/go-cmp/cmp"
-	k8qdiff "github.com/tobiash/k8q/pkg/diff"
 	"sigs.k8s.io/kustomize/kyaml/kio"
+
+	k8qdiff "github.com/tobiash/k8q/pkg/diff"
 )
 
 func TestReorderFilter(t *testing.T) {

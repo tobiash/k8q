@@ -69,7 +69,7 @@ func SumFilter(opts SumOptions) Filter {
 				// Check for missing resources if required.
 				if opts.RequireRequests || opts.RequireLimits {
 					if err := checkResources(node, opts.RequireRequests, opts.RequireLimits); err != nil {
-						fmt.Fprintf(os.Stderr, "Error: %s/%s: %v\n", meta.Kind, meta.Name, err)
+						_, _ = fmt.Fprintf(os.Stderr, "Error: %s/%s: %v\n", meta.Kind, meta.Name, err)
 						missingCount++
 					}
 				}
@@ -151,51 +151,7 @@ func SumJSON(nodes []*yaml.RNode, opts SumOptions) (*SumResult, error) {
 		return nil, fmt.Errorf("resource requirements check failed for %d resources", missingCount)
 	}
 
-	assertions := &SumAssertions{}
-	var assertErr error
-
-	if opts.MaxCPURequests != "" {
-		if threshold, err := resource.ParseQuantity(opts.MaxCPURequests); err == nil && reqCPU.Cmp(threshold) > 0 {
-			assertions.CPURequestsExceeded = true
-			assertions.CPURequestsThreshold = opts.MaxCPURequests
-			assertErr = fmt.Errorf("CPU requests threshold exceeded: got %s, max %s", reqCPU.String(), threshold.String())
-		} else {
-			assertions.CPURequestsThreshold = opts.MaxCPURequests
-		}
-	}
-	if opts.MaxMemRequests != "" {
-		if threshold, err := resource.ParseQuantity(opts.MaxMemRequests); err == nil && reqMem.Cmp(threshold) > 0 {
-			assertions.MemoryRequestsExceeded = true
-			assertions.MemoryRequestsThreshold = opts.MaxMemRequests
-			if assertErr == nil {
-				assertErr = fmt.Errorf("memory requests threshold exceeded: got %s, max %s", reqMem.String(), threshold.String())
-			}
-		} else {
-			assertions.MemoryRequestsThreshold = opts.MaxMemRequests
-		}
-	}
-	if opts.MaxCPULimits != "" {
-		if threshold, err := resource.ParseQuantity(opts.MaxCPULimits); err == nil && limCPU.Cmp(threshold) > 0 {
-			assertions.CPULimitsExceeded = true
-			assertions.CPULimitsThreshold = opts.MaxCPULimits
-			if assertErr == nil {
-				assertErr = fmt.Errorf("CPU limits threshold exceeded: got %s, max %s", limCPU.String(), threshold.String())
-			}
-		} else {
-			assertions.CPULimitsThreshold = opts.MaxCPULimits
-		}
-	}
-	if opts.MaxMemLimits != "" {
-		if threshold, err := resource.ParseQuantity(opts.MaxMemLimits); err == nil && limMem.Cmp(threshold) > 0 {
-			assertions.MemoryLimitsExceeded = true
-			assertions.MemoryLimitsThreshold = opts.MaxMemLimits
-			if assertErr == nil {
-				assertErr = fmt.Errorf("memory limits threshold exceeded: got %s, max %s", limMem.String(), threshold.String())
-			}
-		} else {
-			assertions.MemoryLimitsThreshold = opts.MaxMemLimits
-		}
-	}
+	assertions, assertErr := buildAssertions(reqCPU, reqMem, limCPU, limMem, opts)
 
 	result := &SumResult{
 		Requests: ResourceTotals{CPU: reqCPU.String(), Memory: reqMem.String()},
@@ -208,11 +164,61 @@ func SumJSON(nodes []*yaml.RNode, opts SumOptions) (*SumResult, error) {
 	return result, assertErr
 }
 
+// HasAny reports whether any threshold assertion was exceeded.
 func (a *SumAssertions) HasAny() bool {
 	if a == nil {
 		return false
 	}
 	return a.CPURequestsExceeded || a.MemoryRequestsExceeded || a.CPULimitsExceeded || a.MemoryLimitsExceeded
+}
+
+func evaluateThreshold(actual *resource.Quantity, thresholdStr string) (exceeded bool, threshold string, overErr error) {
+	if thresholdStr == "" {
+		return false, "", nil
+	}
+	q, err := resource.ParseQuantity(thresholdStr)
+	if err != nil {
+		return false, thresholdStr, nil
+	}
+	if actual.Cmp(q) > 0 {
+		return true, thresholdStr, fmt.Errorf("got %s, max %s", actual.String(), q.String())
+	}
+	return false, thresholdStr, nil
+}
+
+func buildAssertions(reqCPU, reqMem, limCPU, limMem *resource.Quantity, opts SumOptions) (*SumAssertions, error) {
+	a := &SumAssertions{}
+	var firstErr error
+
+	exceeded, thr, err := evaluateThreshold(reqCPU, opts.MaxCPURequests)
+	a.CPURequestsExceeded = exceeded
+	a.CPURequestsThreshold = thr
+	if err != nil {
+		firstErr = fmt.Errorf("CPU requests threshold exceeded: %w", err)
+	}
+
+	exceeded, thr, err = evaluateThreshold(reqMem, opts.MaxMemRequests)
+	a.MemoryRequestsExceeded = exceeded
+	a.MemoryRequestsThreshold = thr
+	if err != nil && firstErr == nil {
+		firstErr = fmt.Errorf("memory requests threshold exceeded: %w", err)
+	}
+
+	exceeded, thr, err = evaluateThreshold(limCPU, opts.MaxCPULimits)
+	a.CPULimitsExceeded = exceeded
+	a.CPULimitsThreshold = thr
+	if err != nil && firstErr == nil {
+		firstErr = fmt.Errorf("CPU limits threshold exceeded: %w", err)
+	}
+
+	exceeded, thr, err = evaluateThreshold(limMem, opts.MaxMemLimits)
+	a.MemoryLimitsExceeded = exceeded
+	a.MemoryLimitsThreshold = thr
+	if err != nil && firstErr == nil {
+		firstErr = fmt.Errorf("memory limits threshold exceeded: %w", err)
+	}
+
+	return a, firstErr
 }
 
 func assertThreshold(label string, actual *resource.Quantity, thresholdStr string) error {

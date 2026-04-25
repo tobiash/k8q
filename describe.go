@@ -48,7 +48,6 @@ func describeCLI(w io.Writer, name, description, version string, cli *CLI) error
 
 	// Walk the CLI struct fields looking for commands (fields with cmd tag).
 	t := reflect.TypeOf(*cli)
-	v := reflect.ValueOf(*cli)
 	for i := 0; i < t.NumField(); i++ {
 		field := t.Field(i)
 		if _, hasCmd := field.Tag.Lookup("cmd"); !hasCmd {
@@ -80,11 +79,6 @@ func describeCLI(w io.Writer, name, description, version string, cli *CLI) error
 		if cmdType.Kind() == reflect.Ptr {
 			cmdType = cmdType.Elem()
 		}
-		cmdVal := v.Field(i)
-		if cmdVal.Kind() == reflect.Ptr {
-			cmdVal = cmdVal.Elem()
-		}
-
 		for j := 0; j < cmdType.NumField(); j++ {
 			cmdField := cmdType.Field(j)
 			if cmdField.Tag.Get("kong") == "-" {

@@ -40,6 +40,8 @@ type ResourceChange struct {
 }
 
 // DiffResult holds the structured result of a diff between two manifest sets.
+//
+//nolint:revive // exported API name; renaming would break consumers
 type DiffResult struct {
 	Added    []ObjectRef
 	Removed  []ObjectRef
@@ -53,6 +55,8 @@ func (r *DiffResult) HasChanges() bool {
 
 // DiffNodes computes a semantic diff between two sets of Kubernetes manifests.
 // Resources are matched by identity (apiVersion + kind + namespace + name).
+//
+//nolint:revive // exported API name; renaming would break consumers
 func DiffNodes(before, after []*yaml.RNode) (*DiffResult, error) {
 	reorder := ReorderFilter()
 	if _, err := reorder(before); err != nil {
@@ -157,6 +161,8 @@ func renderNode(node *yaml.RNode) string {
 }
 
 // DiffResultJSON is the JSON representation of a manifest diff.
+//
+//nolint:revive // exported API name; renaming would break consumers
 type DiffResultJSON struct {
 	Added    []map[string]any `json:"added"`
 	Deleted  []ObjectRef      `json:"deleted"`
@@ -164,6 +170,8 @@ type DiffResultJSON struct {
 }
 
 // DiffChangeJSON represents a modified resource with before/after snapshots.
+//
+//nolint:revive // exported API name; renaming would break consumers
 type DiffChangeJSON struct {
 	ObjectRef   ObjectRef      `json:"objectRef"`
 	Old         map[string]any `json:"old"`
@@ -172,6 +180,8 @@ type DiffChangeJSON struct {
 }
 
 // DiffNodesJSON computes a diff and returns a JSON-serializable result.
+//
+//nolint:revive // exported API name; renaming would break consumers
 func DiffNodesJSON(before, after []*yaml.RNode) (*DiffResultJSON, error) {
 	result, err := DiffNodes(before, after)
 	if err != nil {
@@ -237,29 +247,29 @@ func formatUnified(w io.Writer, u gotextdiff.Unified) {
 // FormatUnifiedDiff writes a plain-text summary of the diff.
 func FormatUnifiedDiff(w io.Writer, result *DiffResult) {
 	for _, key := range result.Removed {
-		fmt.Fprintf(w, "REMOVED %s\n\n", key)
+		_, _ = fmt.Fprintf(w, "REMOVED %s\n\n", key)
 	}
 
 	for _, key := range result.Added {
-		fmt.Fprintf(w, "ADDED %s\n\n", key)
+		_, _ = fmt.Fprintf(w, "ADDED %s\n\n", key)
 	}
 
 	for _, change := range result.Modified {
 		formatUnified(w, change.Diff)
-		fmt.Fprintln(w)
+		_, _ = fmt.Fprintln(w)
 	}
 }
 
 // FormatSummary writes a compact list of changed resources.
 func FormatSummary(w io.Writer, result *DiffResult) {
 	for _, key := range sortObjectRefs(result.Removed) {
-		fmt.Fprintf(w, "REMOVED  %s\n", key)
+		_, _ = fmt.Fprintf(w, "REMOVED  %s\n", key)
 	}
 	for _, key := range sortObjectRefs(result.Added) {
-		fmt.Fprintf(w, "ADDED    %s\n", key)
+		_, _ = fmt.Fprintf(w, "ADDED    %s\n", key)
 	}
 	for _, change := range result.Modified {
-		fmt.Fprintf(w, "MODIFIED %s\n", change.Key)
+		_, _ = fmt.Fprintf(w, "MODIFIED %s\n", change.Key)
 	}
 }
 

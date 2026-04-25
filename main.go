@@ -38,6 +38,7 @@ func (g *Globals) resolveInput() (io.Reader, error) {
 	}
 	var buf bytes.Buffer
 	for i, path := range g.Files {
+		//nolint:gosec // path comes from user CLI arguments
 		data, err := os.ReadFile(path)
 		if err != nil {
 			return nil, userError("reading %s: %v", path, err)
@@ -647,7 +648,7 @@ func (cmd *DiffCmd) resolveInputs(g *Globals) (before, after io.Reader, cleanup 
 		if err != nil {
 			return nil, nil, cleanup, userError("opening base file: %v", err)
 		}
-		cleanup = func() { f.Close() }
+		cleanup = func() { _ = f.Close() }
 		return f, after, cleanup, nil
 	}
 
@@ -659,17 +660,17 @@ func (cmd *DiffCmd) resolveInputs(g *Globals) (before, after io.Reader, cleanup 
 			return nil, nil, cleanup, userError("opening %s: %v", cmd.Files[0], e1)
 		}
 		if e2 != nil {
-			b.Close()
+			_ = b.Close()
 			return nil, nil, cleanup, userError("opening %s: %v", cmd.Files[1], e2)
 		}
-		cleanup = func() { b.Close(); a.Close() }
+		cleanup = func() { _ = b.Close(); _ = a.Close() }
 		return b, a, cleanup, nil
 	case 1:
 		f, err := os.Open(cmd.Files[0])
 		if err != nil {
 			return nil, nil, cleanup, userError("opening file %s: %v", cmd.Files[0], err)
 		}
-		cleanup = func() { f.Close() }
+		cleanup = func() { _ = f.Close() }
 		return f, after, cleanup, nil
 	default:
 		return nil, nil, cleanup, userError("provide two files, or use --base with stdin")
@@ -680,6 +681,7 @@ func openFileOrStdin(path string, stdin *os.File) (*os.File, error) {
 	if path == "-" {
 		return stdin, nil
 	}
+	//nolint:gosec // path comes from user CLI arguments
 	return os.Open(path)
 }
 

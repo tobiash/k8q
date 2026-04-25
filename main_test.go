@@ -106,7 +106,7 @@ func TestResolveInputFile(t *testing.T) {
 	dir := t.TempDir()
 	path := filepath.Join(dir, "test.yaml")
 	content := "apiVersion: v1\nkind: ConfigMap\nmetadata:\n  name: test\n"
-	if err := os.WriteFile(path, []byte(content), 0644); err != nil {
+	if err := os.WriteFile(path, []byte(content), 0600); err != nil {
 		t.Fatalf("writing test file: %v", err)
 	}
 
@@ -132,10 +132,10 @@ func TestResolveInputMultipleFiles(t *testing.T) {
 	path2 := filepath.Join(dir, "b.yaml")
 	content1 := "apiVersion: v1\nkind: ConfigMap\nmetadata:\n  name: a\n"
 	content2 := "apiVersion: v1\nkind: Secret\nmetadata:\n  name: b\n"
-	if err := os.WriteFile(path1, []byte(content1), 0644); err != nil {
+	if err := os.WriteFile(path1, []byte(content1), 0600); err != nil {
 		t.Fatalf("writing test file: %v", err)
 	}
-	if err := os.WriteFile(path2, []byte(content2), 0644); err != nil {
+	if err := os.WriteFile(path2, []byte(content2), 0600); err != nil {
 		t.Fatalf("writing test file: %v", err)
 	}
 
@@ -302,7 +302,7 @@ data:
 	// Create a temp file for before
 	dir := t.TempDir()
 	beforeFile := filepath.Join(dir, "before.yaml")
-	if err := os.WriteFile(beforeFile, []byte(before), 0644); err != nil {
+	if err := os.WriteFile(beforeFile, []byte(before), 0600); err != nil {
 		t.Fatalf("writing before file: %v", err)
 	}
 	cmd.Base = beforeFile
@@ -335,7 +335,7 @@ metadata:
 	// Create a temp file with same content
 	dir := t.TempDir()
 	beforeFile := filepath.Join(dir, "before.yaml")
-	if err := os.WriteFile(beforeFile, []byte(yaml), 0644); err != nil {
+	if err := os.WriteFile(beforeFile, []byte(yaml), 0600); err != nil {
 		t.Fatalf("writing before file: %v", err)
 	}
 	cmd.Base = beforeFile
