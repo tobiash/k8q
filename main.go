@@ -15,9 +15,9 @@ import (
 	"github.com/posener/complete"
 	"sigs.k8s.io/kustomize/kyaml/kio"
 
+	"github.com/tobiash/k8q/internal/serve"
 	k8qdiff "github.com/tobiash/k8q/pkg/diff"
 	"github.com/tobiash/k8q/pkg/engine"
-	"github.com/tobiash/k8q/internal/serve"
 )
 
 // Globals holds injected streams and global flags.
@@ -724,14 +724,7 @@ type CLI struct {
 type DescribeCmd struct{}
 
 func (cmd *DescribeCmd) Run(g *Globals) error {
-	if kongParser == nil {
-		return fmt.Errorf("parser not initialized")
-	}
-	cli := &CLI{}
-	if _, err := describeCLI(kongParser, cli); err != nil {
-		return err
-	}
-	return nil
+	return describeCLI("k8q", "A Unix-style pipe for filtering, mutating, and exploring Kubernetes YAML manifests.", version, &CLI{})
 }
 
 func diffExitCode(err error) (int, bool) {
@@ -742,13 +735,11 @@ func diffExitCode(err error) (int, bool) {
 	return 0, false
 }
 
-var kongParser *kong.Kong
-
 func main() {
 	cli := &CLI{}
 	cli.In = os.Stdin
 	cli.Out = os.Stdout
-	kongParser = kong.Must(cli,
+	parser := kong.Must(cli,
 		kong.Name("k8q"),
 		kong.Description("A Unix-style pipe for filtering, mutating, and exploring Kubernetes YAML manifests."),
 		kong.UsageOnError(),
@@ -761,9 +752,9 @@ func main() {
 	)
 
 	// Register completion support.
-	kongcompletion.Register(kongParser, kongcompletion.WithPredictor("kind", complete.PredictSet(engine.CommonKinds...)))
+	kongcompletion.Register(parser, kongcompletion.WithPredictor("kind", complete.PredictSet(engine.CommonKinds...)))
 
-	ctx, err := kongParser.Parse(os.Args[1:])
+	ctx, err := parser.Parse(os.Args[1:])
 	if err != nil {
 		// Parse errors are always user input errors → exit 2.
 		if cli.Output == "json" {

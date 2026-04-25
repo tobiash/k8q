@@ -5,9 +5,9 @@ import (
 
 	"sigs.k8s.io/kustomize/kyaml/kio"
 
+	"github.com/tobiash/k8q/internal/prompt"
 	k8qdiff "github.com/tobiash/k8q/pkg/diff"
 	"github.com/tobiash/k8q/pkg/engine"
-	"github.com/tobiash/k8q/internal/prompt"
 )
 
 // runPipeline executes the YAML pipeline with automatic field reordering

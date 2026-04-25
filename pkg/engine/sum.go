@@ -12,8 +12,8 @@ import (
 
 // SumResult is the JSON representation of a resource sum analysis.
 type SumResult struct {
-	Requests    ResourceTotals `json:"requests"`
-	Limits      ResourceTotals `json:"limits"`
+	Requests   ResourceTotals `json:"requests"`
+	Limits     ResourceTotals `json:"limits"`
 	Assertions *SumAssertions `json:"assertions,omitempty"`
 }
 
@@ -25,14 +25,14 @@ type ResourceTotals struct {
 
 // SumAssertions captures threshold assertion results.
 type SumAssertions struct {
-	CPURequestsExceeded  bool   `json:"cpuRequestsExceeded"`
-	MemoryRequestsExceeded bool `json:"memoryRequestsExceeded"`
-	CPULimitsExceeded    bool   `json:"cpuLimitsExceeded"`
-	MemoryLimitsExceeded bool   `json:"memoryLimitsExceeded"`
-	CPURequestsThreshold string `json:"cpuRequestsThreshold,omitempty"`
+	CPURequestsExceeded     bool   `json:"cpuRequestsExceeded"`
+	MemoryRequestsExceeded  bool   `json:"memoryRequestsExceeded"`
+	CPULimitsExceeded       bool   `json:"cpuLimitsExceeded"`
+	MemoryLimitsExceeded    bool   `json:"memoryLimitsExceeded"`
+	CPURequestsThreshold    string `json:"cpuRequestsThreshold,omitempty"`
 	MemoryRequestsThreshold string `json:"memoryRequestsThreshold,omitempty"`
-	CPULimitsThreshold   string `json:"cpuLimitsThreshold,omitempty"`
-	MemoryLimitsThreshold string `json:"memoryLimitsThreshold,omitempty"`
+	CPULimitsThreshold      string `json:"cpuLimitsThreshold,omitempty"`
+	MemoryLimitsThreshold   string `json:"memoryLimitsThreshold,omitempty"`
 }
 
 // SumOptions configures the sum analyzer.

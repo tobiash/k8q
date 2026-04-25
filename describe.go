@@ -5,24 +5,22 @@ import (
 	"os"
 	"reflect"
 	"strings"
-
-	"github.com/alecthomas/kong"
 )
 
 // cliDescription is the JSON schema emitted by --describe.
 type cliDescription struct {
-	Name        string           `json:"name"`
-	Description string           `json:"description"`
-	Version     string           `json:"version"`
-	Commands    []commandDesc    `json:"commands"`
+	Name        string        `json:"name"`
+	Description string        `json:"description"`
+	Version     string        `json:"version"`
+	Commands    []commandDesc `json:"commands"`
 }
 
 type commandDesc struct {
-	Name        string    `json:"name"`
-	Description string    `json:"description"`
-	Idempotent  bool      `json:"idempotent"`
-	SideEffects bool      `json:"sideEffects"`
-	Args        []argDesc `json:"args,omitempty"`
+	Name        string     `json:"name"`
+	Description string     `json:"description"`
+	Idempotent  bool       `json:"idempotent"`
+	SideEffects bool       `json:"sideEffects"`
+	Args        []argDesc  `json:"args,omitempty"`
 	Flags       []flagDesc `json:"flags,omitempty"`
 }
 
@@ -40,11 +38,11 @@ type flagDesc struct {
 	Description string `json:"description,omitempty"`
 }
 
-// describeCLI walks the Kong CLI struct and returns a JSON description.
-func describeCLI(parser *kong.Kong, cli *CLI) ([]byte, error) {
+// describeCLI walks the Kong CLI struct and emits a JSON description.
+func describeCLI(name, description, version string, cli *CLI) error {
 	desc := cliDescription{
-		Name:        parser.Model.Name,
-		Description: parser.Model.Help,
+		Name:        name,
+		Description: description,
 		Version:     version,
 	}
 
@@ -57,8 +55,10 @@ func describeCLI(parser *kong.Kong, cli *CLI) ([]byte, error) {
 			continue // skip non-command fields (Globals, etc.)
 		}
 
+		name := strings.ToLower(field.Name)
+		name = strings.TrimSuffix(name, "cmd")
 		cmd := commandDesc{
-			Name:        strings.ToLower(field.Name),
+			Name:        name,
 			Description: field.Tag.Get("help"),
 		}
 
@@ -127,5 +127,5 @@ func describeCLI(parser *kong.Kong, cli *CLI) ([]byte, error) {
 
 	enc := json.NewEncoder(os.Stdout)
 	enc.SetIndent("", "  ")
-	return nil, enc.Encode(desc)
+	return enc.Encode(desc)
 }
