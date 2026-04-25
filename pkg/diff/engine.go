@@ -7,6 +7,9 @@ import (
 	"sort"
 	"strings"
 
+	"github.com/hexops/gotextdiff"
+	"github.com/hexops/gotextdiff/myers"
+	"github.com/hexops/gotextdiff/span"
 	"sigs.k8s.io/kustomize/kyaml/kio"
 	"sigs.k8s.io/kustomize/kyaml/yaml"
 )
@@ -33,7 +36,7 @@ type ResourceChange struct {
 	Key    ObjectRef
 	Before string
 	After  string
-	Diff   Unified
+	Diff   gotextdiff.Unified
 }
 
 // DiffResult holds the structured result of a diff between two manifest sets.
@@ -94,7 +97,7 @@ func DiffNodes(before, after []*yaml.RNode) (*DiffResult, error) {
 			continue
 		}
 
-		u := ComputeDiff(key.String(), beforeStr, afterStr)
+		u := computeDiff(key.String(), beforeStr, afterStr)
 
 		result.Modified = append(result.Modified, ResourceChange{
 			Key:    key,
@@ -207,7 +210,7 @@ func DiffNodesJSON(before, after []*yaml.RNode) (*DiffResultJSON, error) {
 		newMap, _ := afterNode.Map()
 
 		var diffBuf bytes.Buffer
-		Format(&diffBuf, change.Diff)
+		formatUnified(&diffBuf, change.Diff)
 
 		out.Modified = append(out.Modified, DiffChangeJSON{
 			ObjectRef:   change.Key,
@@ -218,6 +221,17 @@ func DiffNodesJSON(before, after []*yaml.RNode) (*DiffResultJSON, error) {
 	}
 
 	return out, nil
+}
+
+// computeDiff computes a Myers diff between two multi-line strings.
+func computeDiff(name, before, after string) gotextdiff.Unified {
+	edits := myers.ComputeEdits(span.URIFromPath(name), before, after)
+	return gotextdiff.ToUnified(name, name, before, edits)
+}
+
+// formatUnified writes a unified diff to w.
+func formatUnified(w io.Writer, u gotextdiff.Unified) {
+	fmt.Fprintf(w, "%v", u)
 }
 
 // FormatUnifiedDiff writes a plain-text summary of the diff.
@@ -231,7 +245,7 @@ func FormatUnifiedDiff(w io.Writer, result *DiffResult) {
 	}
 
 	for _, change := range result.Modified {
-		Format(w, change.Diff)
+		formatUnified(w, change.Diff)
 		fmt.Fprintln(w)
 	}
 }
