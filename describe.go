@@ -2,7 +2,7 @@ package main
 
 import (
 	"encoding/json"
-	"os"
+	"io"
 	"reflect"
 	"strings"
 )
@@ -38,8 +38,8 @@ type flagDesc struct {
 	Description string `json:"description,omitempty"`
 }
 
-// describeCLI walks the Kong CLI struct and emits a JSON description.
-func describeCLI(name, description, version string, cli *CLI) error {
+// describeCLI walks the Kong CLI struct and emits a JSON description to w.
+func describeCLI(w io.Writer, name, description, version string, cli *CLI) error {
 	desc := cliDescription{
 		Name:        name,
 		Description: description,
@@ -125,7 +125,7 @@ func describeCLI(name, description, version string, cli *CLI) error {
 		desc.Commands = append(desc.Commands, cmd)
 	}
 
-	enc := json.NewEncoder(os.Stdout)
+	enc := json.NewEncoder(w)
 	enc.SetIndent("", "  ")
 	return enc.Encode(desc)
 }

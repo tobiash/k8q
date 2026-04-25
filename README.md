@@ -153,6 +153,51 @@ k8q diff before.yaml after.yaml --summary
 
 Exit codes: 0 = identical, 1 = differences found, 2+ = error.
 
+### File Input (`--file`, `-f`)
+
+Instead of piping YAML through stdin, you can read directly from a file:
+
+```bash
+k8q get --kind Deployment --file manifest.yaml
+k8q diff --file before.yaml --file after.yaml
+```
+
+### Structured Output (`--output json`)
+
+All commands that produce YAML or reports support `--output json` for machine-readable, agent-friendly output:
+
+```bash
+k8q get --kind ConfigMap --output json
+k8q count --group-by-kind --output json
+k8q diff before.yaml after.yaml --output json
+k8q sum --output json
+```
+
+JSON output follows Kubernetes API conventions:
+- Lists are wrapped in a `v1/List` envelope with `apiVersion`, `kind`, and `items`
+- Resource references use `ObjectRef` (`apiVersion`, `kind`, `name`, `namespace`)
+- Quantities are rendered as Kubernetes quantity strings (e.g., `"200m"`, `"512Mi"`)
+
+### Semantic Exit Codes
+
+k8q uses semantic exit codes for reliable automation:
+
+| Code | Meaning |
+|---|---|
+| 0 | Success (no differences for `diff`) |
+| 1 | Differences found (`diff` only) |
+| 2 | User input error (bad args, missing file, invalid config) |
+
+### Programmatic Discovery (`describe`)
+
+The hidden `describe` command emits a JSON description of the CLI for agent consumption:
+
+```bash
+k8q describe
+```
+
+This includes all commands, flags, descriptions, idempotency, and side-effect metadata.
+
 ### `serve` — Mock API server
 
 Starts an in-process mock Kubernetes API server that serves piped-in manifests over HTTPS. Writes a kubeconfig pointing to the server, then optionally executes a command with `KUBECONFIG` set. This lets cluster scanning tools connect to k8q as if it were a real cluster.

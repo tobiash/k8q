@@ -724,7 +724,7 @@ type CLI struct {
 type DescribeCmd struct{}
 
 func (cmd *DescribeCmd) Run(g *Globals) error {
-	return describeCLI("k8q", "A Unix-style pipe for filtering, mutating, and exploring Kubernetes YAML manifests.", version, &CLI{})
+	return describeCLI(g.Out, "k8q", "A Unix-style pipe for filtering, mutating, and exploring Kubernetes YAML manifests.", version, &CLI{})
 }
 
 func diffExitCode(err error) (int, bool) {
