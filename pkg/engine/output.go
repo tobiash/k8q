@@ -10,14 +10,14 @@ import (
 // JSONListEnvelope is the Kubernetes "List" resource envelope used when
 // outputting multiple objects as JSON.
 type JSONListEnvelope struct {
-	APIVersion string        `json:"apiVersion"`
-	Kind       string        `json:"kind"`
-	Items      []interface{} `json:"items"`
+	APIVersion string `json:"apiVersion"`
+	Kind       string `json:"kind"`
+	Items      []any  `json:"items"`
 }
 
 // WriteJSONList writes nodes as a Kubernetes List envelope JSON to out.
 func WriteJSONList(out io.Writer, nodes []*yaml.RNode) error {
-	items := make([]interface{}, 0, len(nodes))
+	items := make([]any, 0, len(nodes))
 	for _, n := range nodes {
 		m, err := n.Map()
 		if err != nil {

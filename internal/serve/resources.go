@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"io"
 	"strings"
+	"time"
 
 	"k8s.io/apimachinery/pkg/apis/meta/v1/unstructured"
 	"k8s.io/apimachinery/pkg/labels"
@@ -30,7 +31,7 @@ func ParseManifests(in io.Reader) ([]*unstructured.Unstructured, error) {
 	var objects []*unstructured.Unstructured
 	decoder := k8syaml.NewYAMLToJSONDecoder(in)
 	for {
-		obj := make(map[string]interface{})
+		obj := make(map[string]any)
 		if err := decoder.Decode(&obj); err != nil {
 			if err == io.EOF {
 				break
@@ -240,9 +241,9 @@ func gvkOf(obj *unstructured.Unstructured) GVK {
 }
 
 func enrichMetadata(obj *unstructured.Unstructured) {
-	meta, ok := obj.Object["metadata"].(map[string]interface{})
+	meta, ok := obj.Object["metadata"].(map[string]any)
 	if !ok {
-		meta = make(map[string]interface{})
+		meta = make(map[string]any)
 		obj.Object["metadata"] = meta
 	}
 	if _, exists := meta["uid"]; !exists {
@@ -258,16 +259,21 @@ func enrichMetadata(obj *unstructured.Unstructured) {
 
 func generateUID() string {
 	b := make([]byte, 16)
-	_, _ = rand.Read(b)
+	if _, err := rand.Read(b); err != nil {
+		// crypto/rand should never fail for 16 bytes, but handle gracefully.
+		// Use timestamp + counter as fallback (not cryptographically secure,
+		// but sufficient for mock server UIDs).
+		return fmt.Sprintf("%x", time.Now().UnixNano())[:16]
+	}
 	return hex.EncodeToString(b)
 }
 
 func synthesizeNamespace(name string) *unstructured.Unstructured {
 	return &unstructured.Unstructured{
-		Object: map[string]interface{}{
+		Object: map[string]any{
 			"apiVersion": "v1",
 			"kind":       "Namespace",
-			"metadata": map[string]interface{}{
+			"metadata": map[string]any{
 				"name": name,
 			},
 		},

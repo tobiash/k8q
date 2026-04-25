@@ -791,15 +791,15 @@ func main() {
 
 // jsonErrorEnvelope is the structured error output used when --output json is set.
 type jsonErrorEnvelope struct {
-	Status string      `json:"status"`
-	Data   interface{} `json:"data"`
-	Error  jsonError   `json:"error"`
+	Status string    `json:"status"`
+	Data   any       `json:"data"`
+	Error  jsonError `json:"error"`
 }
 
 type jsonError struct {
-	Reason  string                 `json:"reason"`
-	Message string                 `json:"message"`
-	Details map[string]interface{} `json:"details,omitempty"`
+	Reason  string         `json:"reason"`
+	Message string         `json:"message"`
+	Details map[string]any `json:"details,omitempty"`
 }
 
 func writeJSONError(out io.Writer, err error) {

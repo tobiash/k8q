@@ -125,7 +125,7 @@ func buildResourceMap(nodes []*yaml.RNode) (map[ObjectRef]*yaml.RNode, error) {
 	for _, node := range nodes {
 		meta, err := node.GetMeta()
 		if err != nil {
-			continue
+			return nil, fmt.Errorf("reading resource metadata: %w", err)
 		}
 		key := ObjectRefFromMeta(meta)
 		m[key] = node
@@ -231,7 +231,7 @@ func computeDiff(name, before, after string) gotextdiff.Unified {
 
 // formatUnified writes a unified diff to w.
 func formatUnified(w io.Writer, u gotextdiff.Unified) {
-	fmt.Fprintf(w, "%v", u)
+	_, _ = fmt.Fprintf(w, "%v", u)
 }
 
 // FormatUnifiedDiff writes a plain-text summary of the diff.

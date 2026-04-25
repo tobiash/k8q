@@ -283,29 +283,29 @@ func (s *Server) handleGetGroupNamespaced(w http.ResponseWriter, r *http.Request
 // --- Auth handlers ---
 
 func (s *Server) handleSelfSubjectAccessReview(w http.ResponseWriter, _ *http.Request) {
-	writeJSON(w, http.StatusOK, map[string]interface{}{
+	writeJSON(w, http.StatusOK, map[string]any{
 		"kind":       "SelfSubjectAccessReview",
 		"apiVersion": "authorization.k8s.io/v1",
-		"metadata":   map[string]interface{}{},
-		"status":     map[string]interface{}{"allowed": true},
+		"metadata":   map[string]any{},
+		"status":     map[string]any{"allowed": true},
 	})
 }
 
 func (s *Server) handleSelfSubjectRulesReview(w http.ResponseWriter, _ *http.Request) {
-	writeJSON(w, http.StatusOK, map[string]interface{}{
+	writeJSON(w, http.StatusOK, map[string]any{
 		"kind":       "SelfSubjectRulesReview",
 		"apiVersion": "authorization.k8s.io/v1",
-		"metadata":   map[string]interface{}{},
-		"status": map[string]interface{}{
-			"resourceRules": []interface{}{
-				map[string]interface{}{
+		"metadata":   map[string]any{},
+		"status": map[string]any{
+			"resourceRules": []any{
+				map[string]any{
 					"verbs":     []string{"*"},
 					"apiGroups": []string{"*"},
 					"resources": []string{"*"},
 				},
 			},
-			"nonResourceRules": []interface{}{
-				map[string]interface{}{
+			"nonResourceRules": []any{
+				map[string]any{
 					"verbs":           []string{"*"},
 					"nonResourceURLs": []string{"*"},
 				},
@@ -347,7 +347,7 @@ func (s *Server) respondGet(w http.ResponseWriter, gvr GVR, ns, name string) {
 	writeJSON(w, http.StatusOK, obj)
 }
 
-func writeJSON(w http.ResponseWriter, code int, v interface{}) {
+func writeJSON(w http.ResponseWriter, code int, v any) {
 	w.Header().Set("Content-Type", "application/json")
 	w.WriteHeader(code)
 	_ = json.NewEncoder(w).Encode(v)
@@ -356,10 +356,10 @@ func writeJSON(w http.ResponseWriter, code int, v interface{}) {
 func writeError(w http.ResponseWriter, code int, message string) {
 	w.Header().Set("Content-Type", "application/json")
 	w.WriteHeader(code)
-	_ = json.NewEncoder(w).Encode(map[string]interface{}{
+	_ = json.NewEncoder(w).Encode(map[string]any{
 		"kind":       "Status",
 		"apiVersion": "v1",
-		"metadata":   map[string]interface{}{},
+		"metadata":   map[string]any{},
 		"status":     "Failure",
 		"message":    message,
 		"code":       code,
