@@ -716,7 +716,22 @@ type CLI struct {
 	Sum          SumCmd                    `cmd:"" help:"Sum CPU and Memory requests for matching manifests."`
 	Diff         DiffCmd                   `cmd:"" help:"Compare two sets of Kubernetes manifests."`
 	Serve        ServeCmd                  `cmd:"" help:"Start a mock Kubernetes API server for piped-in manifests."`
+	Describe     DescribeCmd               `cmd:"" help:"Print JSON description of CLI and exit."`
 	Completion   kongcompletion.Completion `cmd:"" help:"Print shell completion script."`
+}
+
+// DescribeCmd prints a JSON description of the CLI for programmatic discovery.
+type DescribeCmd struct{}
+
+func (cmd *DescribeCmd) Run(g *Globals) error {
+	if kongParser == nil {
+		return fmt.Errorf("parser not initialized")
+	}
+	cli := &CLI{}
+	if _, err := describeCLI(kongParser, cli); err != nil {
+		return err
+	}
+	return nil
 }
 
 func diffExitCode(err error) (int, bool) {
@@ -727,11 +742,13 @@ func diffExitCode(err error) (int, bool) {
 	return 0, false
 }
 
+var kongParser *kong.Kong
+
 func main() {
 	cli := &CLI{}
 	cli.In = os.Stdin
 	cli.Out = os.Stdout
-	parser := kong.Must(cli,
+	kongParser = kong.Must(cli,
 		kong.Name("k8q"),
 		kong.Description("A Unix-style pipe for filtering, mutating, and exploring Kubernetes YAML manifests."),
 		kong.UsageOnError(),
@@ -744,9 +761,9 @@ func main() {
 	)
 
 	// Register completion support.
-	kongcompletion.Register(parser, kongcompletion.WithPredictor("kind", complete.PredictSet(engine.CommonKinds...)))
+	kongcompletion.Register(kongParser, kongcompletion.WithPredictor("kind", complete.PredictSet(engine.CommonKinds...)))
 
-	ctx, err := parser.Parse(os.Args[1:])
+	ctx, err := kongParser.Parse(os.Args[1:])
 	if err != nil {
 		// Parse errors are always user input errors → exit 2.
 		if cli.Output == "json" {
