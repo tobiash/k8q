@@ -99,22 +99,25 @@ func SumFilter(opts SumOptions) Filter {
 			return nil, fmt.Errorf("parsing resource summary: %w", err)
 		}
 
-		// Assertions.
-		if err := assertThreshold("CPU Requests", reqCPU, opts.MaxCPURequests); err != nil {
-			return nil, err
-		}
-		if err := assertThreshold("Memory Requests", reqMem, opts.MaxMemRequests); err != nil {
-			return nil, err
-		}
-		if err := assertThreshold("CPU Limits", limCPU, opts.MaxCPULimits); err != nil {
-			return nil, err
-		}
-		if err := assertThreshold("Memory Limits", limMem, opts.MaxMemLimits); err != nil {
+		if err := assertSumThresholds(reqCPU, reqMem, limCPU, limMem, opts); err != nil {
 			return nil, err
 		}
 
 		return []*yaml.RNode{summaryNode}, nil
 	}
+}
+
+func assertSumThresholds(reqCPU, reqMem, limCPU, limMem *resource.Quantity, opts SumOptions) error {
+	if err := assertThreshold("CPU Requests", reqCPU, opts.MaxCPURequests); err != nil {
+		return err
+	}
+	if err := assertThreshold("Memory Requests", reqMem, opts.MaxMemRequests); err != nil {
+		return err
+	}
+	if err := assertThreshold("CPU Limits", limCPU, opts.MaxCPULimits); err != nil {
+		return err
+	}
+	return assertThreshold("Memory Limits", limMem, opts.MaxMemLimits)
 }
 
 // SumJSON computes resource totals and returns a JSON-serializable result
