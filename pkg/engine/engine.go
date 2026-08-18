@@ -18,6 +18,24 @@ import (
 // transformed subset. Each k8q command implements one Filter.
 type Filter = kio.FilterFunc
 
+const rawOutputTag = "!k8q/raw"
+
+type pipelineWriter struct {
+	io.Writer
+}
+
+func (w pipelineWriter) Write(nodes []*yaml.RNode) error {
+	if len(nodes) == 1 && nodes[0].YNode().Tag == rawOutputTag {
+		output := nodes[0].Field("output")
+		if output == nil {
+			return fmt.Errorf("raw output node is missing output field")
+		}
+		_, err := io.WriteString(w.Writer, output.Value.YNode().Value)
+		return err
+	}
+	return (&kio.ByteWriter{Writer: w.Writer}).Write(nodes)
+}
+
 // Pipeline reads a multi-document YAML stream from in, applies filters in
 // order, and writes the resulting documents to out.
 func Pipeline(in io.Reader, out io.Writer, filters ...kio.Filter) error {
@@ -27,9 +45,7 @@ func Pipeline(in io.Reader, out io.Writer, filters ...kio.Filter) error {
 			OmitReaderAnnotations: true,
 		}},
 		Filters: filters,
-		Outputs: []kio.Writer{&kio.ByteWriter{
-			Writer: out,
-		}},
+		Outputs: []kio.Writer{pipelineWriter{Writer: out}},
 		// ContinueOnEmptyResult so subst can produce output from
 		// raw bytes even when the filter chain returns nothing.
 		ContinueOnEmptyResult: true,

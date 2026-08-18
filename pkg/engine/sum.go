@@ -92,7 +92,7 @@ func SumFilter(opts SumOptions) Filter {
 			return nil, fmt.Errorf("resource requirements check failed for %d resources: %w", missingCount, firstResourceErr)
 		}
 
-		summary := fmt.Sprintf("Requests:\n  CPU:    %s\n  Memory: %s\nLimits:\n  CPU:    %s\n  Memory: %s\n",
+		summary := fmt.Sprintf("%s\noutput: |\n  Requests:\n    CPU:    %s\n    Memory: %s\n  Limits:\n    CPU:    %s\n    Memory: %s\n", rawOutputTag,
 			reqCPU.String(), formatMemory(reqMem), limCPU.String(), formatMemory(limMem))
 		summaryNode, err := yaml.Parse(summary)
 		if err != nil {

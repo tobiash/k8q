@@ -46,12 +46,12 @@ func TestSumFilter(t *testing.T) {
 			name:       "required limits present",
 			input:      workloadWithResources,
 			opts:       SumOptions{RequireLimits: true},
-			wantOutput: "Requests:\n  CPU: 200m\n  Memory: 128.00 Mi\nLimits:\n  CPU: 500m\n  Memory: 256.00 Mi\n",
+			wantOutput: "Requests:\n  CPU:    200m\n  Memory: 128.00 Mi\nLimits:\n  CPU:    500m\n  Memory: 256.00 Mi\n",
 		},
 		{
 			name:       "summary reaches pipeline writer",
 			input:      workloadWithResources,
-			wantOutput: "Requests:\n  CPU: 200m\n  Memory: 128.00 Mi\nLimits:\n  CPU: 500m\n  Memory: 256.00 Mi\n",
+			wantOutput: "Requests:\n  CPU:    200m\n  Memory: 128.00 Mi\nLimits:\n  CPU:    500m\n  Memory: 256.00 Mi\n",
 		},
 	}
 
