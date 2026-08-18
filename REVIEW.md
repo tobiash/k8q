@@ -6,11 +6,13 @@ Code review of the `k8q` repository. Automated checks (`gofmt`, `go vet`, `golan
 
 ## Findings
 
+Last reviewed: 2026-08-18
+
 ### Must Fix
 
-- [ ] `pkg/diff/engine.go:234` — Unchecked error return from `fmt.Fprintf(w, "%v", u)`. Same pattern as fmp. **Rule**: [go-error-handling]
-- [ ] `internal/serve/resources.go:261` — `generateUID` ignores error from `crypto/rand.Read`. For a mock server this is low-risk but should be handled. **Rule**: [go-defensive]
-- [ ] `pkg/diff/engine.go:123` — `buildResourceMap` silently skips malformed nodes with `continue` instead of propagating the error. If a node can't be read, the diff result may be silently incomplete. **Rule**: [go-error-handling]
+- [x] `pkg/diff/engine.go:244-272` — Resolved: diff formatting already uses `_, _ = fmt.Fprintf(...)`; no production fix is needed. **Rule**: [go-error-handling]
+- [x] `internal/serve/resources.go:261` — Resolved: `generateUID` handles `crypto/rand.Read` errors with a fallback UID. **Rule**: [go-defensive]
+- [x] `pkg/diff/engine.go:123` — Resolved: `buildResourceMap` returns malformed-node metadata errors instead of silently skipping them. **Rule**: [go-error-handling]
 
 ### Should Fix
 
@@ -18,8 +20,8 @@ Code review of the `k8q` repository. Automated checks (`gofmt`, `go vet`, `golan
 - [ ] `pkg/engine/output.go:15,20` — Uses `interface{}` instead of `any`. **Rule**: [go-declarations]
 - [ ] `internal/serve/server.go:286-362` — Multiple `map[string]interface{}` and `[]interface{}` usages. **Rule**: [go-declarations]
 - [ ] `internal/serve/resources.go:33,243,245,267,270` — Multiple `map[string]interface{}` usages. **Rule**: [go-declarations]
-- [ ] `pkg/engine/sum.go:72` — `fmt.Fprintf(os.Stderr, ...)` for error reporting in a pipeline filter. Filter errors should be returned, not printed to stderr. **Rule**: [go-error-handling]
-- [ ] `pkg/engine/sum.go:93-98` — `SumFilter` prints directly to stdout with `fmt.Println`/`fmt.Printf`, bypassing the pipeline output writer, then terminates with `return nil, nil`. This breaks composability. **Rule**: [go-functions]
+- [x] `pkg/engine/sum.go` — Resolved: missing resource requirements now produce a filter error after all matching resources are checked; `SumFilter` no longer writes diagnostics directly to stderr. **Rule**: [go-error-handling]
+- [x] `pkg/engine/sum.go` — Resolved: the unchanged six-line summary is returned to the pipeline and emitted by its writer instead of being printed directly to stdout. **Rule**: [go-functions]
 
 ### Nits
 

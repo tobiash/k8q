@@ -2,7 +2,6 @@ package engine
 
 import (
 	"fmt"
-	"os"
 	"strconv"
 	"strings"
 
@@ -58,6 +57,7 @@ func SumFilter(opts SumOptions) Filter {
 		limMem := resource.NewQuantity(0, resource.BinarySI)
 
 		var missingCount int
+		var firstResourceErr error
 
 		for _, node := range nodes {
 			meta, err := node.GetMeta()
@@ -69,7 +69,9 @@ func SumFilter(opts SumOptions) Filter {
 				// Check for missing resources if required.
 				if opts.RequireRequests || opts.RequireLimits {
 					if err := checkResources(node, opts.RequireRequests, opts.RequireLimits); err != nil {
-						_, _ = fmt.Fprintf(os.Stderr, "Error: %s/%s: %v\n", meta.Kind, meta.Name, err)
+						if firstResourceErr == nil {
+							firstResourceErr = fmt.Errorf("%s/%s: %w", meta.Kind, meta.Name, err)
+						}
 						missingCount++
 					}
 				}
@@ -87,15 +89,15 @@ func SumFilter(opts SumOptions) Filter {
 		}
 
 		if (opts.RequireRequests || opts.RequireLimits) && missingCount > 0 {
-			return nil, fmt.Errorf("resource requirements check failed for %d resources", missingCount)
+			return nil, fmt.Errorf("resource requirements check failed for %d resources: %w", missingCount, firstResourceErr)
 		}
 
-		fmt.Println("Requests:")
-		fmt.Printf("  CPU:    %s\n", reqCPU.String())
-		fmt.Printf("  Memory: %s\n", formatMemory(reqMem))
-		fmt.Println("Limits:")
-		fmt.Printf("  CPU:    %s\n", limCPU.String())
-		fmt.Printf("  Memory: %s\n", formatMemory(limMem))
+		summary := fmt.Sprintf("Requests:\n  CPU:    %s\n  Memory: %s\nLimits:\n  CPU:    %s\n  Memory: %s\n",
+			reqCPU.String(), formatMemory(reqMem), limCPU.String(), formatMemory(limMem))
+		summaryNode, err := yaml.Parse(summary)
+		if err != nil {
+			return nil, fmt.Errorf("parsing resource summary: %w", err)
+		}
 
 		// Assertions.
 		if err := assertThreshold("CPU Requests", reqCPU, opts.MaxCPURequests); err != nil {
@@ -111,7 +113,7 @@ func SumFilter(opts SumOptions) Filter {
 			return nil, err
 		}
 
-		return nil, nil // Terminate pipeline
+		return []*yaml.RNode{summaryNode}, nil
 	}
 }
 
