@@ -2,6 +2,7 @@ package engine
 
 import (
 	"encoding/json"
+	"fmt"
 	"io"
 
 	"sigs.k8s.io/kustomize/kyaml/yaml"
@@ -18,10 +19,13 @@ type JSONListEnvelope struct {
 // WriteJSONList writes nodes as a Kubernetes List envelope JSON to out.
 func WriteJSONList(out io.Writer, nodes []*yaml.RNode) error {
 	items := make([]any, 0, len(nodes))
-	for _, n := range nodes {
+	for i, n := range nodes {
+		if yaml.IsMissingOrNull(n) || n.YNode().Kind != yaml.MappingNode {
+			return fmt.Errorf("resource %d must be a mapping", i+1)
+		}
 		m, err := n.Map()
 		if err != nil {
-			continue
+			return fmt.Errorf("converting resource %d to JSON: %w", i+1, err)
 		}
 		items = append(items, m)
 	}

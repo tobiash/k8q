@@ -3,11 +3,11 @@ package main
 import (
 	"encoding/json"
 	"io"
-	"reflect"
-	"strings"
+
+	"github.com/alecthomas/kong"
 )
 
-// cliDescription is the JSON schema emitted by --describe.
+// cliDescription is the JSON schema emitted by describe.
 type cliDescription struct {
 	Name        string        `json:"name"`
 	Description string        `json:"description"`
@@ -32,6 +32,7 @@ type argDesc struct {
 
 type flagDesc struct {
 	Name        string `json:"name"`
+	Required    bool   `json:"required"`
 	Short       string `json:"short,omitempty"`
 	Type        string `json:"type,omitempty"`
 	Default     string `json:"default,omitempty"`
@@ -40,80 +41,52 @@ type flagDesc struct {
 
 // describeCLI walks the Kong CLI struct and emits a JSON description to w.
 func describeCLI(w io.Writer, name, description, version string, cli *CLI) error {
+	parser, err := kong.New(cli, kong.Name(name), kong.Description(description), kong.DefaultEnvars(""))
+	if err != nil {
+		return err
+	}
 	desc := cliDescription{
 		Name:        name,
 		Description: description,
 		Version:     version,
 	}
 
-	// Walk the CLI struct fields looking for commands (fields with cmd tag).
-	t := reflect.TypeOf(*cli)
-	for i := 0; i < t.NumField(); i++ {
-		field := t.Field(i)
-		if _, hasCmd := field.Tag.Lookup("cmd"); !hasCmd {
-			continue // skip non-command fields (Globals, etc.)
-		}
-
-		name := strings.ToLower(field.Name)
-		name = strings.TrimSuffix(name, "cmd")
+	for _, node := range parser.Model.Children {
 		cmd := commandDesc{
-			Name:        name,
-			Description: field.Tag.Get("help"),
+			Name:        node.Name,
+			Description: node.Help,
+			SideEffects: true,
 		}
 
-		// Heuristic: mutators have side effects, get/diff/count/sum do not.
+		// These commands only read inputs and emit output; transforms do not
+		// write back to files or a cluster. Serve can execute arbitrary code.
+		// Unknown commands retain conservative defaults.
 		switch cmd.Name {
-		case "get", "count", "sum", "diff", "serve", "completion":
+		case "get", "drop", "label", "annotate", "set-image", "patch",
+			"remove", "scale", "set-namespace", "count", "sum", "diff", "describe", "completion":
 			cmd.Idempotent = true
 			cmd.SideEffects = false
-		case "subst":
-			cmd.Idempotent = true
-			cmd.SideEffects = false // subst is a pure transform
-		default:
-			cmd.Idempotent = false
-			cmd.SideEffects = true
+		case "rename", "subst":
+			cmd.SideEffects = false
 		}
 
-		// Walk command struct for args and flags.
-		cmdType := field.Type
-		if cmdType.Kind() == reflect.Ptr {
-			cmdType = cmdType.Elem()
+		for _, arg := range node.Positional {
+			cmd.Args = append(cmd.Args, argDesc{Name: arg.Name, Required: arg.Required, Description: arg.Help})
 		}
-		for j := 0; j < cmdType.NumField(); j++ {
-			cmdField := cmdType.Field(j)
-			if cmdField.Tag.Get("kong") == "-" {
-				continue
-			}
-
-			arg := cmdField.Tag.Get("arg")
-			if arg != "" {
-				argDesc := argDesc{
-					Name:        strings.ToLower(cmdField.Name),
-					Required:    arg != "optional",
-					Description: cmdField.Tag.Get("help"),
+		for _, group := range node.AllFlags(false) {
+			for _, flag := range group {
+				f := flagDesc{
+					Name: flag.Name, Required: flag.Required, Description: flag.Help,
+					Type: flag.Target.Type().String(), Default: flag.Default,
 				}
-				cmd.Args = append(cmd.Args, argDesc)
-				continue
+				if flag.Tag.Type != "" {
+					f.Type = flag.Tag.Type
+				}
+				if flag.Short != 0 {
+					f.Short = string(flag.Short)
+				}
+				cmd.Flags = append(cmd.Flags, f)
 			}
-
-			flagName := cmdField.Tag.Get("name")
-			if flagName == "" {
-				flagName = strings.ToLower(cmdField.Name)
-			}
-			if flagName == "" {
-				continue
-			}
-
-			f := flagDesc{
-				Name:        flagName,
-				Short:       cmdField.Tag.Get("short"),
-				Description: cmdField.Tag.Get("help"),
-				Type:        cmdField.Tag.Get("type"),
-			}
-			if def := cmdField.Tag.Get("default"); def != "" {
-				f.Default = def
-			}
-			cmd.Flags = append(cmd.Flags, f)
 		}
 
 		desc.Commands = append(desc.Commands, cmd)

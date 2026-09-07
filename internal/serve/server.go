@@ -37,7 +37,8 @@ func (e exitCodeError) Error() string {
 // ExitCode extracts the exit code from an error. Returns (code, true) if the
 // error is a child exit code, or (0, false) otherwise.
 func ExitCode(err error) (int, bool) {
-	if e, ok := err.(exitCodeError); ok {
+	var e exitCodeError
+	if errors.As(err, &e) {
 		return int(e), true
 	}
 	return 0, false
@@ -47,7 +48,7 @@ func ExitCode(err error) (int, bool) {
 // starts a mock API server, and either executes the given command with a
 // kubeconfig pointing to the server or waits for a signal (interactive mode).
 // Returns nil on success or an exitCodeError when the child exits non-zero.
-func Run(in io.Reader, port int, command []string) error {
+func Run(in io.Reader, port int, command []string) (runErr error) {
 	objects, err := ParseManifests(in)
 	if err != nil {
 		return fmt.Errorf("parsing manifests: %w", err)
@@ -59,19 +60,42 @@ func Run(in io.Reader, port int, command []string) error {
 	if err != nil {
 		return fmt.Errorf("starting server: %w", err)
 	}
-	_ = srv.Shutdown(context.Background())
 	defer srv.Cleanup()
 
-	go func() { _ = srv.Serve() }()
+	ctx, stop := signal.NotifyContext(context.Background(), syscall.SIGINT, syscall.SIGTERM)
+	defer stop()
+	ctx, cancel := context.WithCancel(ctx)
+	defer cancel()
+	serveDone := make(chan error, 1)
+	go func() {
+		err := srv.Serve()
+		serveDone <- err
+		cancel()
+	}()
+	defer func() {
+		shutdownCtx, shutdownCancel := context.WithTimeout(context.Background(), 5*time.Second)
+		defer shutdownCancel()
+		shutdownErr := srv.Shutdown(shutdownCtx)
+		// Also close the listener if shutdown raced with Serve starting.
+		_ = srv.listener.Close()
+		if shutdownErr != nil {
+			_ = srv.server.Close()
+		}
+		serveErr := <-serveDone
+		if errors.Is(serveErr, http.ErrServerClosed) {
+			serveErr = nil
+		}
+		runErr = errors.Join(runErr, shutdownErr, serveErr)
+	}()
 
 	if len(command) > 0 {
-		return execChild(command, srv.KubeconfigPath())
+		return execChild(ctx, command, srv.KubeconfigPath())
 	}
 
 	fmt.Fprintf(os.Stderr, "kubeconfig: %s\n", srv.KubeconfigPath())
 	fmt.Fprintf(os.Stderr, "server: https://%s\n", srv.Addr())
 	fmt.Fprintf(os.Stderr, "Press Ctrl+C to stop.\n")
-	waitForSignal()
+	<-ctx.Done()
 	return nil
 }
 
@@ -379,31 +403,36 @@ func parseSelector(s string) labels.Selector {
 
 // --- Child process execution ---
 
-func execChild(command []string, kubeconfigPath string) error {
-	cmd := exec.Command(command[0], command[1:]...) //nolint:gosec
+func execChild(ctx context.Context, command []string, kubeconfigPath string) error {
+	cmd := exec.CommandContext(ctx, command[0], command[1:]...) //nolint:gosec
+	configureChildCancellation(cmd)
 	cmd.Stdin = os.Stdin
 	cmd.Stdout = os.Stdout
 	cmd.Stderr = os.Stderr
 	cmd.Env = append(os.Environ(), "KUBECONFIG="+kubeconfigPath)
 
 	err := cmd.Run()
+	if ctx.Err() != nil && cmd.Process != nil {
+		// Wait can win the race with context cancellation when the leader exits
+		// first. Still terminate any descendants left in its owned group.
+		if cancelErr := cmd.Cancel(); cancelErr != nil && !errors.Is(cancelErr, os.ErrProcessDone) {
+			return fmt.Errorf("cancelling child: %w", cancelErr)
+		}
+		return ctx.Err()
+	}
 	if err == nil {
 		return nil
 	}
 
 	var exitErr *exec.ExitError
 	if errors.As(err, &exitErr) {
+		if status, ok := exitErr.Sys().(syscall.WaitStatus); ok && status.Signaled() {
+			return exitCodeError(128 + int(status.Signal()))
+		}
 		return exitCodeError(exitErr.ExitCode())
 	}
 
 	return fmt.Errorf("executing %s: %w", strings.Join(command, " "), err)
-}
-
-// waitForSignal blocks until SIGINT or SIGTERM is received.
-func waitForSignal() {
-	ch := make(chan os.Signal, 1)
-	signal.Notify(ch, syscall.SIGINT, syscall.SIGTERM)
-	<-ch
 }
 
 // --- TLS generation ---
