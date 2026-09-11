@@ -55,17 +55,11 @@ func (r *DiffResult) HasChanges() bool {
 
 // DiffNodes computes a semantic diff between two sets of Kubernetes manifests.
 // Resources are matched by identity (apiVersion + kind + namespace + name).
+// Inputs are not modified. Invalid nodes and duplicate identities within either
+// input are rejected rather than omitted or overwritten.
 //
 //nolint:revive // exported API name; renaming would break consumers
 func DiffNodes(before, after []*yaml.RNode) (*DiffResult, error) {
-	reorder := ReorderFilter()
-	if _, err := reorder(before); err != nil {
-		return nil, fmt.Errorf("normalizing before: %w", err)
-	}
-	if _, err := reorder(after); err != nil {
-		return nil, fmt.Errorf("normalizing after: %w", err)
-	}
-
 	beforeMap, err := buildResourceMap(before)
 	if err != nil {
 		return nil, fmt.Errorf("indexing before: %w", err)
@@ -74,7 +68,10 @@ func DiffNodes(before, after []*yaml.RNode) (*DiffResult, error) {
 	if err != nil {
 		return nil, fmt.Errorf("indexing after: %w", err)
 	}
+	return diffResourceMaps(beforeMap, afterMap)
+}
 
+func diffResourceMaps(beforeMap, afterMap map[ObjectRef]*yaml.RNode) (*DiffResult, error) {
 	result := &DiffResult{}
 
 	for key := range afterMap {
@@ -94,8 +91,14 @@ func DiffNodes(before, after []*yaml.RNode) (*DiffResult, error) {
 			continue
 		}
 
-		beforeStr := renderNode(beforeNode)
-		afterStr := renderNode(afterNode)
+		beforeStr, err := renderNode(beforeNode)
+		if err != nil {
+			return nil, fmt.Errorf("rendering before %v: %w", key, err)
+		}
+		afterStr, err := renderNode(afterNode)
+		if err != nil {
+			return nil, fmt.Errorf("rendering after %v: %w", key, err)
+		}
 
 		if beforeStr == afterStr {
 			continue
@@ -112,13 +115,13 @@ func DiffNodes(before, after []*yaml.RNode) (*DiffResult, error) {
 	}
 
 	sort.Slice(result.Added, func(i, j int) bool {
-		return result.Added[i].String() < result.Added[j].String()
+		return lessRef(result.Added[i], result.Added[j])
 	})
 	sort.Slice(result.Removed, func(i, j int) bool {
-		return result.Removed[i].String() < result.Removed[j].String()
+		return lessRef(result.Removed[i], result.Removed[j])
 	})
 	sort.Slice(result.Modified, func(i, j int) bool {
-		return result.Modified[i].Key.String() < result.Modified[j].Key.String()
+		return lessRef(result.Modified[i].Key, result.Modified[j].Key)
 	})
 
 	return result, nil
@@ -126,12 +129,49 @@ func DiffNodes(before, after []*yaml.RNode) (*DiffResult, error) {
 
 func buildResourceMap(nodes []*yaml.RNode) (map[ObjectRef]*yaml.RNode, error) {
 	m := make(map[ObjectRef]*yaml.RNode, len(nodes))
-	for _, node := range nodes {
-		meta, err := node.GetMeta()
-		if err != nil {
-			return nil, fmt.Errorf("reading resource metadata: %w", err)
+	for i, node := range nodes {
+		if yaml.IsMissingOrNull(node) || node.YNode().Kind != yaml.MappingNode {
+			return nil, fmt.Errorf("resource %d must be a mapping", i+1)
 		}
-		key := ObjectRefFromMeta(meta)
+		// Normalize only copies: callers may reuse the original ASTs.
+		node = node.Copy()
+		object, err := node.Map()
+		if err != nil {
+			return nil, fmt.Errorf("converting resource %d to map: %w", i+1, err)
+		}
+		metadata, _ := object["metadata"].(map[string]any)
+		var key ObjectRef
+		for _, field := range []struct {
+			name   string
+			value  any
+			target *string
+		}{
+			{"apiVersion", object["apiVersion"], &key.APIVersion},
+			{"kind", object["kind"], &key.Kind},
+			{"metadata.name", metadata["name"], &key.Name},
+		} {
+			value, ok := field.value.(string)
+			if !ok || strings.TrimSpace(value) == "" {
+				return nil, fmt.Errorf("resource %d requires a non-empty string %s", i+1, field.name)
+			}
+			*field.target = value
+		}
+		if namespace, exists := metadata["namespace"]; exists {
+			var ok bool
+			key.Namespace, ok = namespace.(string)
+			if !ok {
+				return nil, fmt.Errorf("resource %d requires a string metadata.namespace", i+1)
+			}
+		}
+		if _, exists := m[key]; exists {
+			return nil, fmt.Errorf("duplicate resource identity: %s %s", key.APIVersion, key)
+		}
+		if _, err := ReorderFilter()([]*yaml.RNode{node}); err != nil {
+			return nil, fmt.Errorf("normalizing %v: %w", key, err)
+		}
+		if _, err := renderNode(node); err != nil {
+			return nil, fmt.Errorf("rendering %v: %w", key, err)
+		}
 		m[key] = node
 	}
 	return m, nil
@@ -147,17 +187,17 @@ func ObjectRefFromMeta(meta yaml.ResourceMeta) ObjectRef {
 	}
 }
 
-func renderNode(node *yaml.RNode) string {
+func renderNode(node *yaml.RNode) (string, error) {
 	var buf bytes.Buffer
 	writer := &kio.ByteWriter{Writer: &buf}
 	if err := writer.Write([]*yaml.RNode{node}); err != nil {
-		return ""
+		return "", err
 	}
 	s := buf.String()
 	if s != "" && !strings.HasSuffix(s, "\n") {
 		s += "\n"
 	}
-	return s
+	return s, nil
 }
 
 // DiffResultJSON is the JSON representation of a manifest diff.
@@ -183,25 +223,28 @@ type DiffChangeJSON struct {
 //
 //nolint:revive // exported API name; renaming would break consumers
 func DiffNodesJSON(before, after []*yaml.RNode) (*DiffResultJSON, error) {
-	result, err := DiffNodes(before, after)
+	beforeMap, err := buildResourceMap(before)
+	if err != nil {
+		return nil, fmt.Errorf("indexing before: %w", err)
+	}
+	afterMap, err := buildResourceMap(after)
+	if err != nil {
+		return nil, fmt.Errorf("indexing after: %w", err)
+	}
+	result, err := diffResourceMaps(beforeMap, afterMap)
 	if err != nil {
 		return nil, err
 	}
 
-	beforeMap, _ := buildResourceMap(before)
-	afterMap, _ := buildResourceMap(after)
-
-	out := &DiffResultJSON{}
+	out := &DiffResultJSON{Added: []map[string]any{}, Deleted: []ObjectRef{}, Modified: []DiffChangeJSON{}}
 
 	for _, key := range result.Added {
 		node := afterMap[key]
-		if node == nil {
-			continue
+		m, err := node.Map()
+		if err != nil {
+			return nil, fmt.Errorf("converting added %v: %w", key, err)
 		}
-		m, _ := node.Map()
-		if m != nil {
-			out.Added = append(out.Added, m)
-		}
+		out.Added = append(out.Added, m)
 	}
 
 	for _, key := range result.Removed {
@@ -216,8 +259,14 @@ func DiffNodesJSON(before, after []*yaml.RNode) (*DiffResultJSON, error) {
 	for _, change := range result.Modified {
 		beforeNode := beforeMap[change.Key]
 		afterNode := afterMap[change.Key]
-		oldMap, _ := beforeNode.Map()
-		newMap, _ := afterNode.Map()
+		oldMap, err := beforeNode.Map()
+		if err != nil {
+			return nil, fmt.Errorf("converting before %v: %w", change.Key, err)
+		}
+		newMap, err := afterNode.Map()
+		if err != nil {
+			return nil, fmt.Errorf("converting after %v: %w", change.Key, err)
+		}
 
 		var diffBuf bytes.Buffer
 		formatUnified(&diffBuf, change.Diff)
@@ -277,7 +326,17 @@ func sortObjectRefs(refs []ObjectRef) []ObjectRef {
 	sorted := make([]ObjectRef, len(refs))
 	copy(sorted, refs)
 	sort.Slice(sorted, func(i, j int) bool {
-		return sorted[i].String() < sorted[j].String()
+		return lessRef(sorted[i], sorted[j])
 	})
 	return sorted
+}
+
+func lessRef(a, b ObjectRef) bool {
+	for i, av := range [...]string{a.Kind, a.Name, a.Namespace, a.APIVersion} {
+		bv := [...]string{b.Kind, b.Name, b.Namespace, b.APIVersion}[i]
+		if av != bv {
+			return av < bv
+		}
+	}
+	return false
 }
