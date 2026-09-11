@@ -94,6 +94,10 @@ func SumJSON(nodes []*yaml.RNode, opts SumOptions) (*SumResult, error) {
 			return nil, fmt.Errorf("resource %d metadata: %w", i+1, err)
 		}
 		if Match(meta, opts.Match) {
+			if meta.Name == "" {
+				generated, _ := node.Pipe(yaml.Lookup("metadata", "generateName")) // Validated by sumResourceMeta.
+				meta.Name = "generateName=" + generated.YNode().Value
+			}
 			r, l, err := getPodResources(node)
 			if err != nil {
 				return nil, fmt.Errorf("%s/%s resources: %w", meta.Kind, meta.Name, err)
@@ -135,7 +139,7 @@ func SumJSON(nodes []*yaml.RNode, opts SumOptions) (*SumResult, error) {
 	return result, assertErr
 }
 
-func sumResourceMeta(node *yaml.RNode) (yaml.ResourceMeta, error) {
+func sumResourceMeta(node *yaml.RNode) (yaml.ResourceMeta, error) { //nolint:gocyclo // Keep metadata shape, type and identity validation together.
 	var meta yaml.ResourceMeta
 	if yaml.IsMissingOrNull(node) || node.YNode().Kind != yaml.MappingNode {
 		return meta, fmt.Errorf("resource must be a mapping")
@@ -156,8 +160,22 @@ func sumResourceMeta(node *yaml.RNode) (yaml.ResourceMeta, error) {
 	if err := json.Unmarshal(data, &meta); err != nil {
 		return meta, err
 	}
-	if meta.APIVersion == "" || meta.Kind == "" || meta.Name == "" {
-		return meta, fmt.Errorf("apiVersion, kind and metadata.name are required")
+	name, err := metadata.Pipe(yaml.Lookup("name"))
+	if err != nil {
+		return meta, err
+	}
+	if name != nil && name.YNode().Tag == "!!null" {
+		return meta, fmt.Errorf("metadata.name must be a string")
+	}
+	generated, err := metadata.Pipe(yaml.Lookup("generateName"))
+	if err != nil {
+		return meta, err
+	}
+	if generated != nil && (generated.YNode().Kind != yaml.ScalarNode || generated.YNode().Tag != "!!str") {
+		return meta, fmt.Errorf("metadata.generateName must be a string")
+	}
+	if meta.APIVersion == "" || meta.Kind == "" || (meta.Name == "" && (generated == nil || generated.YNode().Value == "")) {
+		return meta, fmt.Errorf("apiVersion, kind and metadata.name or metadata.generateName are required")
 	}
 	return meta, nil
 }

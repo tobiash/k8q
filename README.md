@@ -237,7 +237,9 @@ Flags:
 
 k8q exits with the child command's exit code. In interactive mode, press Ctrl+C to stop.
 
-Shutdown removes the temporary kubeconfig. On Unix, cancellation also terminates child processes remaining in the command's process group; other platforms cancel the immediate child. This is not a sandbox: child commands inherit the environment and can access other credentials or networks. The mock API does not implement admission, reconciliation, scheduling, or a complete Kubernetes API surface.
+Shutdown removes the temporary kubeconfig. On Unix, cancellation or completion of the main child also terminates descendants remaining in its process group; other platforms cancel the immediate child. Foreground commands can read the controlling terminal, and k8q restores terminal ownership afterward using a short-lived `/bin/sh` helper. Background invocations do not take foreground ownership.
+
+This is not a sandbox: child commands inherit the environment and can access other credentials or networks. The mock API does not implement admission, reconciliation, scheduling, or a complete Kubernetes API surface.
 
 ## Analyzers
 
@@ -261,6 +263,8 @@ k8q count --group-by-kind
 ### `sum` — Sum resources
 
 Estimates CPU and Memory requests/limits for matching manifests (looking in ordinary containers in Pods and Pod templates). Accounts for `spec.replicas`, defaulting to one when absent. Invalid quantities, replicas, and assertion thresholds fail instead of producing a passing budget check. Quoted quantities are supported.
+
+Workloads using `metadata.generateName` instead of `metadata.name` are supported. Their prefix is included in diagnostics, but is not treated as a resource name for matching. Unlike aggregation, `diff` still requires a concrete resource name.
 
 These totals are not scheduler-equivalent: init-container requirements, Pod overhead, and DaemonSet node counts are not modeled.
 

@@ -403,21 +403,30 @@ func parseSelector(s string) labels.Selector {
 
 // --- Child process execution ---
 
-func execChild(ctx context.Context, command []string, kubeconfigPath string) error {
+func execChild(ctx context.Context, command []string, kubeconfigPath string) (retErr error) {
 	cmd := exec.CommandContext(ctx, command[0], command[1:]...) //nolint:gosec
-	configureChildCancellation(cmd)
+	restore, err := configureChildCancellation(cmd)
+	if err != nil {
+		return err
+	}
+	defer func() { retErr = errors.Join(retErr, restore()) }()
 	cmd.Stdin = os.Stdin
 	cmd.Stdout = os.Stdout
 	cmd.Stderr = os.Stderr
 	cmd.Env = append(os.Environ(), "KUBECONFIG="+kubeconfigPath)
 
-	err := cmd.Run()
+	err = cmd.Run()
+	if cmd.Process != nil {
+		// The server's lifetime ends with the leader, regardless of its exit
+		// status (including signal traps). Clean up the owned group before the
+		// earlier defer restores the terminal, preserving the leader's result.
+		defer func() {
+			if cancelErr := cleanupChild(cmd); cancelErr != nil && !errors.Is(cancelErr, os.ErrProcessDone) {
+				retErr = errors.Join(retErr, fmt.Errorf("cleaning up child: %w", cancelErr))
+			}
+		}()
+	}
 	if ctx.Err() != nil && cmd.Process != nil {
-		// Wait can win the race with context cancellation when the leader exits
-		// first. Still terminate any descendants left in its owned group.
-		if cancelErr := cmd.Cancel(); cancelErr != nil && !errors.Is(cancelErr, os.ErrProcessDone) {
-			return fmt.Errorf("cancelling child: %w", cancelErr)
-		}
 		return ctx.Err()
 	}
 	if err == nil {

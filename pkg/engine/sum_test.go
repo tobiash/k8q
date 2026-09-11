@@ -10,6 +10,31 @@ import (
 
 const sumPod = "apiVersion: v1\nkind: Pod\nmetadata:\n  name: test\nspec:\n  containers:\n  - name: c\n    resources:\n      requests:\n        cpu: 2\n        memory: 1Mi\n      limits:\n        cpu: 3\n        memory: 2Mi\n"
 
+func TestSumGeneratedName(t *testing.T) {
+	node := yaml.MustParse(strings.Replace(sumPod, "name: test", "generateName: worker-", 1))
+	result, err := SumJSON([]*yaml.RNode{node}, SumOptions{})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if result.Requests != (ResourceTotals{CPU: "2", Memory: "1Mi"}) || result.Limits != (ResourceTotals{CPU: "3", Memory: "2Mi"}) {
+		t.Errorf("generated Pod totals = %+v", result)
+	}
+	for _, match := range []MatchOptions{{Kind: "Deployment"}, {Name: "worker-"}, {Resource: "Pod/worker-"}} {
+		result, err := SumJSON([]*yaml.RNode{node}, SumOptions{Match: match})
+		if err != nil || result == nil || result.Requests.CPU != "0" {
+			t.Errorf("SumJSON match %+v = %+v, %v; want zero totals", match, result, err)
+		}
+	}
+	node = yaml.MustParse(strings.Replace(node.MustString(), "limits:", "unused:", 1))
+	result, err = SumJSON([]*yaml.RNode{node}, SumOptions{RequireLimits: true, MaxCPURequests: "1"})
+	if !errors.Is(err, ErrAssertion) || result == nil {
+		t.Fatalf("generated Pod assertions = %+v, %v; want result and ErrAssertion", result, err)
+	}
+	if result.Assertions.Passed || !result.Assertions.CPURequestsExceeded || len(result.Assertions.MissingResources) != 1 || !strings.Contains(result.Assertions.MissingResources[0], "Pod/generateName=worker-") {
+		t.Errorf("generated Pod assertions = %+v", result.Assertions)
+	}
+}
+
 func TestSumRejectsInvalidAccounting(t *testing.T) {
 	cases := map[string]*yaml.RNode{
 		"nil node":         nil,
@@ -22,6 +47,13 @@ func TestSumRejectsInvalidAccounting(t *testing.T) {
 		"invalid requests": yaml.MustParse(strings.Replace(sumPod, "requests:\n        cpu: 2\n        memory: 1Mi", "requests: broken", 1)),
 		"null container":   yaml.MustParse("apiVersion: v1\nkind: Pod\nmetadata:\n  name: test\nspec:\n  containers: [null]\n"),
 		"null containers":  yaml.MustParse("apiVersion: v1\nkind: Pod\nmetadata:\n  name: test\nspec:\n  containers: null\n"),
+	}
+	for _, value := range []string{"12", "true", "[]", "{}", "null", "''"} {
+		cases["generateName="+value] = yaml.MustParse(strings.Replace(sumPod, "name: test", "generateName: "+value, 1))
+	}
+	for _, value := range []string{"12", "true", "[]", "{}", "null"} {
+		cases["name="+value+" with generateName"] = yaml.MustParse(strings.Replace(sumPod, "name: test", "name: "+value+"\n  generateName: worker-", 1))
+		cases["generateName="+value+" with name"] = yaml.MustParse(strings.Replace(sumPod, "name: test", "name: test\n  generateName: "+value, 1))
 	}
 	for _, value := range []string{"bad", "-1", "[]", "{}", "null", "true"} {
 		for _, field := range []string{"cpu: 2", "memory: 1Mi", "cpu: 3", "memory: 2Mi"} {

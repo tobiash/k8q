@@ -19,6 +19,8 @@ import (
 	"testing"
 	"time"
 
+	"github.com/tobiash/k8q/pkg/engine"
+
 	"sigs.k8s.io/kustomize/kyaml/yaml"
 )
 
@@ -112,6 +114,38 @@ func TestCLIJSONTrust(t *testing.T) {
 	}
 }
 
+func TestCLISumGeneratedPod(t *testing.T) {
+	generated := "apiVersion: v1\nkind: Pod\nmetadata:\n  generateName: worker-\n  namespace: jobs\n  labels:\n    app: worker\nspec:\n  containers:\n  - name: worker\n    image: busybox:1.37\n    resources:\n      requests:\n        cpu: 2\n        memory: 1Mi\n"
+	named := "apiVersion: v1\nkind: Pod\nmetadata:\n  name: named\nspec:\n  containers:\n  - name: worker\n    image: busybox:1.37\n    resources:\n      requests:\n        cpu: 1\n        memory: 1Mi\n"
+	for _, tt := range []struct {
+		name string
+		args []string
+		cpu  string
+		code int
+	}{
+		{"all", nil, "3", 0},
+		{"kind", []string{"--kind=Pod"}, "3", 0},
+		{"namespace", []string{"--namespace=jobs"}, "2", 0},
+		{"selector", []string{"--selector=app=worker"}, "2", 0},
+		{"named only", []string{"--name=named"}, "1", 0},
+		{"prefix is not name", []string{"--name=worker-"}, "0", 0},
+		{"prefix is not identity", []string{"Pod/worker-"}, "0", 0},
+		{"unrelated kind", []string{"--kind=Deployment"}, "0", 0},
+		{"assertions", []string{"--namespace=jobs", "--max-cpu-requests=1", "--require-limits"}, "2", 1},
+	} {
+		t.Run(tt.name, func(t *testing.T) {
+			out, stderr, code := runCLI(t, generated+"---\n"+named, append([]string{"sum", "--output=json"}, tt.args...)...)
+			var result engine.SumResult
+			if err := json.Unmarshal([]byte(out), &result); err != nil || code != tt.code || result.Requests.CPU != tt.cpu {
+				t.Fatalf("generated Pod sum: code=%d result=%+v JSON error=%v stdout=%s stderr=%s; want code=%d CPU=%s", code, result, err, out, stderr, tt.code, tt.cpu)
+			}
+			if tt.code == 1 && (result.Assertions == nil || result.Assertions.Passed || !result.Assertions.CPURequestsExceeded || len(result.Assertions.MissingResources) != 1 || !strings.Contains(result.Assertions.MissingResources[0], "Pod/generateName=worker-")) {
+				t.Errorf("generated Pod assertion details = %+v", result.Assertions)
+			}
+		})
+	}
+}
+
 func TestCLIDiffOutcomes(t *testing.T) {
 	manifest := "apiVersion: v1\nkind: ConfigMap\nmetadata:\n  name: test\n"
 	base := filepath.Join(t.TempDir(), "base.yaml")
@@ -127,6 +161,7 @@ func TestCLIDiffOutcomes(t *testing.T) {
 		{"malformed", "[invalid", 2},
 		{"duplicate", manifest + "---\n" + manifest, 2},
 		{"invalid identity", "kind: ConfigMap\n", 2},
+		{"generated identity", strings.Replace(manifest, "name: test", "generateName: test-", 1), 2},
 	} {
 		t.Run(tt.name, func(t *testing.T) {
 			out, stderr, code := runCLI(t, tt.input, "diff", "--base="+base, "--output=json")
