@@ -24,10 +24,11 @@ func TestExecChildTerminal(t *testing.T) {
 				t.Fatal(err)
 			}
 			t.Cleanup(func() { _ = master.Close() })
-			if err := unix.IoctlSetPointerInt(int(master.Fd()), unix.TIOCSPTLCK, 0); err != nil {
+			fd := int(master.Fd()) //nolint:gosec // A successfully opened Unix descriptor fits in int and remains open during the test.
+			if err := unix.IoctlSetPointerInt(fd, unix.TIOCSPTLCK, 0); err != nil {
 				t.Fatal(err)
 			}
-			number, err := unix.IoctlGetInt(int(master.Fd()), unix.TIOCGPTN)
+			number, err := unix.IoctlGetInt(fd, unix.TIOCGPTN)
 			if err != nil {
 				t.Fatal(err)
 			}

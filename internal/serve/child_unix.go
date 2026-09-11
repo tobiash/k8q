@@ -33,7 +33,8 @@ func configureChildCancellation(cmd *exec.Cmd) (func() error, error) {
 		}
 		return nil, fmt.Errorf("opening controlling terminal: %w", err)
 	}
-	foreground, err := unix.IoctlGetInt(int(tty.Fd()), unix.TIOCGPGRP)
+	fd := int(tty.Fd()) //nolint:gosec // A successfully opened Unix descriptor is an int; tty stays open until restoration.
+	foreground, err := unix.IoctlGetInt(fd, unix.TIOCGPGRP)
 	if err != nil {
 		_ = tty.Close() // No buffered terminal data to flush; preserve the ioctl error.
 		return nil, fmt.Errorf("reading terminal foreground group: %w", err)
@@ -43,14 +44,14 @@ func configureChildCancellation(cmd *exec.Cmd) (func() error, error) {
 		return tty.Close, nil
 	}
 	cmd.SysProcAttr.Foreground = true
-	cmd.SysProcAttr.Ctty = int(tty.Fd())
+	cmd.SysProcAttr.Ctty = fd
 	return func() error {
 		defer func() { _ = tty.Close() }() // This descriptor is only used for ioctls.
 		// Go blocks SIGTTOU around the child's foreground ioctl, before exec.
 		// Do restoration in that child too: changing signal.Ignore/Notify in
 		// this process would interfere with the caller and concurrent goroutines.
 		restore := exec.Command("/bin/sh", "-c", ":")
-		restore.SysProcAttr = &syscall.SysProcAttr{Foreground: true, Pgid: foreground, Ctty: int(tty.Fd())}
+		restore.SysProcAttr = &syscall.SysProcAttr{Foreground: true, Pgid: foreground, Ctty: fd}
 		if err := restore.Run(); err != nil {
 			return fmt.Errorf("restoring terminal foreground group: %w", err)
 		}
