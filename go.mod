@@ -9,6 +9,7 @@ require (
 	github.com/hexops/gotextdiff v1.0.3
 	github.com/jotaen/kong-completion v0.0.13
 	github.com/posener/complete v1.2.3
+	golang.org/x/sys v0.38.0
 	k8s.io/apimachinery v0.35.3
 )
 
@@ -36,7 +37,6 @@ require (
 	github.com/x448/float16 v0.8.4 // indirect
 	github.com/xlab/treeprint v1.2.0 // indirect
 	golang.org/x/net v0.47.0 // indirect
-	golang.org/x/sys v0.38.0 // indirect
 	golang.org/x/text v0.31.0 // indirect
 	gopkg.in/inf.v0 v0.9.1 // indirect
 	k8s.io/klog/v2 v2.130.1 // indirect

@@ -138,7 +138,9 @@ k8q rename --suffix "-v2"
 
 ### `diff` — Compare manifests
 
-Compares two sets of Kubernetes manifests semantically. Resources are matched by identity (`apiVersion + kind + namespace + name`), so differences in document order or field ordering are ignored.
+Compares two sets of Kubernetes manifests by identity (`apiVersion + kind + namespace + name`). Document order and known top-level/metadata field ordering are normalized. Nested mapping order, comments, and other YAML representation differences can still produce changes; this is not Kubernetes defaulting or API-version conversion.
+
+Duplicate identities and invalid resources are errors, not silently overwritten entries. The Go diff API leaves its input nodes unchanged and orders results by full identity.
 
 ```bash
 # Compare two files
@@ -159,7 +161,7 @@ Instead of piping YAML through stdin, you can read directly from a file:
 
 ```bash
 k8q get --kind Deployment --file manifest.yaml
-k8q diff --file before.yaml --file after.yaml
+k8q diff before.yaml after.yaml
 ```
 
 ### Structured Output (`--output json`)
@@ -177,6 +179,9 @@ JSON output follows Kubernetes API conventions:
 - Lists are wrapped in a `v1/List` envelope with `apiVersion`, `kind`, and `items`
 - Resource references use `ObjectRef` (`apiVersion`, `kind`, `name`, `namespace`)
 - Quantities are rendered as Kubernetes quantity strings (e.g., `"200m"`, `"512Mi"`)
+- Empty resource/change collections are arrays, not `null`
+- `drop` and `subst` produce the same `v1/List` envelope as other manifest transforms
+- Failed `sum` assertions retain totals and `assertions.passed: false` in a single JSON result; invalid inputs instead produce a failure envelope
 
 ### Semantic Exit Codes
 
@@ -185,18 +190,20 @@ k8q uses semantic exit codes for reliable automation:
 | Code | Meaning |
 |---|---|
 | 0 | Success (no differences for `diff`) |
-| 1 | Differences found (`diff` only) |
-| 2 | User input error (bad args, missing file, invalid config) |
+| 1 | Differences found (`diff`) or failed resource assertions (`sum`) |
+| 2 | Invalid input or an operational failure, including read/write errors |
+
+JSON failures are emitted once, including argument-parsing errors. `serve` is an exception to the table: it propagates a completed child command's exit status.
 
 ### Programmatic Discovery (`describe`)
 
-The hidden `describe` command emits a JSON description of the CLI for agent consumption:
+The `describe` command emits a JSON description of the CLI for agent consumption:
 
 ```bash
 k8q describe
 ```
 
-This includes all commands, flags, descriptions, idempotency, and side-effect metadata.
+This includes command names, positional arguments, local/global flags, types, defaults, required status, descriptions, idempotency, and side-effect metadata. Names and arguments come from the CLI parser. Stream transformations do not write back to source files; `serve` is side-effecting and can execute arbitrary code. Metadata describes behavior, not an authorization boundary.
 
 ### `serve` — Mock API server
 
@@ -230,6 +237,10 @@ Flags:
 
 k8q exits with the child command's exit code. In interactive mode, press Ctrl+C to stop.
 
+Shutdown removes the temporary kubeconfig. On Unix, cancellation or completion of the main child also terminates descendants remaining in its process group; other platforms cancel the immediate child. Foreground commands can read the controlling terminal, and k8q restores terminal ownership afterward using a short-lived `/bin/sh` helper. Background invocations do not take foreground ownership.
+
+This is not a sandbox: child commands inherit the environment and can access other credentials or networks. The mock API does not implement admission, reconciliation, scheduling, or a complete Kubernetes API surface.
+
 ## Analyzers
 
 Analyzers provide insights about the stream. They typically terminate the pipeline by printing a report instead of YAML.
@@ -251,7 +262,11 @@ k8q count --group-by-kind
 
 ### `sum` — Sum resources
 
-Calculates total CPU and Memory requests for matching manifests (looking in Pod templates). Accounts for `spec.replicas`.
+Estimates CPU and Memory requests/limits for matching manifests (looking in ordinary containers in Pods and Pod templates). Accounts for `spec.replicas`, defaulting to one when absent. Invalid quantities, replicas, and assertion thresholds fail instead of producing a passing budget check. Quoted quantities are supported.
+
+Workloads using `metadata.generateName` instead of `metadata.name` are supported. Their prefix is included in diagnostics, but is not treated as a resource name for matching. Unlike aggregation, `diff` still requires a concrete resource name.
+
+These totals are not scheduler-equivalent: init-container requirements, Pod overhead, and DaemonSet node counts are not modeled.
 
 ```bash
 # Sum resources for all workloads

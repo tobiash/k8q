@@ -131,6 +131,13 @@ func (cmd *SubstCmd) Run(g *Globals) error {
 		return err
 	}
 
+	if g.Output == "json" {
+		nodes, err := engine.ReadNodes(strings.NewReader(substituted))
+		if err != nil {
+			return err
+		}
+		return engine.WriteJSONList(g.Out, nodes)
+	}
 	return runPipeline(g, strings.NewReader(substituted))
 }
 
@@ -484,12 +491,18 @@ func (cmd *SumCmd) Run(g *Globals) error {
 			return err
 		}
 		result, err := engine.SumJSON(nodes, opts)
-		if err != nil {
+		if err != nil && !errors.Is(err, engine.ErrAssertion) {
 			return err
 		}
 		enc := json.NewEncoder(g.Out)
 		enc.SetIndent("", "  ")
-		return enc.Encode(result)
+		if encodeErr := enc.Encode(result); encodeErr != nil {
+			return encodeErr
+		}
+		if err != nil {
+			return reportedError{err}
+		}
+		return nil
 	}
 
 	return runPipeline(g, in, engine.SumFilter(opts))
@@ -507,11 +520,6 @@ type DropCmd struct {
 
 // Run executes the drop command.
 func (cmd *DropCmd) Run(g *Globals) error {
-	in, err := g.resolveInput()
-	if err != nil {
-		return err
-	}
-
 	sel, err := engine.ParseSelectorFlag(cmd.Selector)
 	if err != nil {
 		return err
@@ -529,7 +537,7 @@ func (cmd *DropCmd) Run(g *Globals) error {
 		return err
 	}
 
-	return runPipeline(g, in, engine.DropFilter(opts))
+	return runOrJSON(g, engine.DropFilter(opts))
 }
 
 // SetNamespaceCmd overwrites metadata.namespace on matching manifests.
@@ -606,11 +614,6 @@ func (cmd *DiffCmd) Run(g *Globals) error {
 		return fmt.Errorf("reading after: %w", err)
 	}
 
-	result, err := k8qdiff.DiffNodes(beforeNodes, afterNodes)
-	if err != nil {
-		return err
-	}
-
 	if g.Output == "json" {
 		jsonResult, err := k8qdiff.DiffNodesJSON(beforeNodes, afterNodes)
 		if err != nil {
@@ -621,12 +624,24 @@ func (cmd *DiffCmd) Run(g *Globals) error {
 		if err := enc.Encode(jsonResult); err != nil {
 			return err
 		}
-	} else {
-		if cmd.Summary {
-			k8qdiff.FormatSummary(g.Out, result)
-		} else {
-			k8qdiff.FormatUnifiedDiff(g.Out, result)
+		if len(jsonResult.Added)+len(jsonResult.Deleted)+len(jsonResult.Modified) > 0 {
+			return DiffExitError(DiffExitCode)
 		}
+		return nil
+	}
+
+	result, err := k8qdiff.DiffNodes(beforeNodes, afterNodes)
+	if err != nil {
+		return err
+	}
+	var rendered bytes.Buffer
+	if cmd.Summary {
+		k8qdiff.FormatSummary(&rendered, result)
+	} else {
+		k8qdiff.FormatUnifiedDiff(&rendered, result)
+	}
+	if _, err := rendered.WriteTo(g.Out); err != nil {
+		return fmt.Errorf("writing diff: %w", err)
 	}
 
 	if result.HasChanges() {
@@ -689,6 +704,11 @@ func openFileOrStdin(path string, stdin *os.File) (*os.File, error) {
 type DiffExitError int
 
 func (e DiffExitError) Error() string { return "differences found" }
+
+// reportedError marks an assertion failure already included in JSON output.
+type reportedError struct{ error }
+
+func (e reportedError) Unwrap() error { return e.error }
 
 // ErrUserInput marks errors caused by invalid CLI arguments, missing files,
 // or other user-correctable mistakes. These exit with code 2.
@@ -759,7 +779,7 @@ func main() {
 	ctx, err := parser.Parse(os.Args[1:])
 	if err != nil {
 		// Parse errors are always user input errors → exit 2.
-		if cli.Output == "json" {
+		if cli.Output == "json" || requestsJSON(os.Args[1:]) {
 			writeJSONError(cli.Out, err)
 		} else {
 			fmt.Fprintln(os.Stderr, err)
@@ -776,10 +796,14 @@ func main() {
 			os.Exit(code)
 		}
 
-		// User-correctable errors → exit 2.
-		exitCode := 1
-		if errors.Is(err, ErrUserInput) {
-			exitCode = 2
+		// Reserve exit 1 for expected diff/assertion outcomes, not failures.
+		exitCode := 2
+		if errors.Is(err, engine.ErrAssertion) {
+			exitCode = 1
+		}
+		var reported reportedError
+		if errors.As(err, &reported) {
+			os.Exit(exitCode)
 		}
 
 		if cli.Output == "json" {
@@ -789,6 +813,32 @@ func main() {
 		fmt.Fprintln(os.Stderr, err)
 		os.Exit(exitCode)
 	}
+}
+
+// Kong does not apply flag values when parsing fails. Inspect only the output
+// flag so usage errors still honor the requested format, stopping at passthrough.
+func requestsJSON(args []string) bool {
+	var output string
+	for i := 0; i < len(args); i++ {
+		arg := args[i]
+		if arg == "--" {
+			break
+		}
+		switch {
+		case arg == "--output" || arg == "-o":
+			if i+1 < len(args) {
+				i++
+				output = args[i]
+			}
+		case strings.HasPrefix(arg, "--output="):
+			output = strings.TrimPrefix(arg, "--output=")
+		case strings.HasPrefix(arg, "-o="):
+			output = strings.TrimPrefix(arg, "-o=")
+		case strings.HasPrefix(arg, "-o"):
+			output = strings.TrimPrefix(arg, "-o")
+		}
+	}
+	return output == "json"
 }
 
 // jsonErrorEnvelope is the structured error output used when --output json is set.
